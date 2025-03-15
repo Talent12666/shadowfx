@@ -1,0 +1,8 @@
+Flask
+twilio
+requests
+pandas
+pandas_ta
+python-dotenv
+APScheduler
+gunicorn
