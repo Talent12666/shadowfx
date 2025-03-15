@@ -3,6 +3,7 @@ load_dotenv()  # This loads from .env automatically
 
 from flask import Flask, request
 from twilio.twiml.messaging_response import MessagingResponse
+from twilio.rest import Client
 import requests
 import pandas as pd
 import pandas_ta as ta
@@ -16,14 +17,22 @@ app = Flask(__name__)
 # ======== GLOBAL TRACKING SYSTEM ========
 active_trades = {}
 trade_history = []
-user_alerts = {}
+user_alerts = {}      # Stores user numbers per symbol for alerts
 previous_trends = {}
 winrate_thresholds = [80, 50, 40]
 trade_lock = Lock()
 scheduler = BackgroundScheduler()
 
-# ======== TWELVE DATA CONFIGURATION ========
+# ======== TWELVE DATA & TWILIO CONFIGURATION ========
 TWELVE_API_KEY = os.getenv('TWELVE_API_KEY')
+
+# Twilio credentials (set these in your environment variables)
+TWILIO_ACCOUNT_SID = os.getenv('TWILIO_ACCOUNT_SID')
+TWILIO_AUTH_TOKEN = os.getenv('TWILIO_AUTH_TOKEN')
+TWILIO_WHATSAPP_NUMBER = os.getenv('TWILIO_WHATSAPP_NUMBER')  # e.g., "whatsapp:+14155238886"
+
+client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
+
 SYMBOL_MAP = {
     # Forex (Major Pairs)
     "EURUSD": {"symbol": "EUR/USD", "category": "forex"},
@@ -73,7 +82,7 @@ TIMEFRAMES = {
 # ======== MARKET MONITORING SYSTEM ========
 def check_market_conditions():
     with trade_lock:
-        # Trade monitoring logic
+        # Monitor active trades for SL/TP and breakeven conditions
         for trade_id in list(active_trades.keys()):
             trade = active_trades[trade_id]
             df = get_twelve_data(trade['symbol'], '1min')
@@ -87,20 +96,18 @@ def check_market_conditions():
             tp1 = trade['tp1']
             tp2 = trade['tp2']
 
-            # SL/TP checks
             if (direction == 'BUY' and current_price <= sl) or (direction == 'SELL' and current_price >= sl):
                 handle_sl_hit(trade_id)
             elif (direction == 'BUY' and current_price >= tp2) or (direction == 'SELL' and current_price <= tp2):
                 handle_tp2_hit(trade_id)
-            elif not trade['breakeven'] and ((direction == 'BUY' and current_price >= tp1) or (direction == 'SELL' and current_price <= tp1)):
+            elif not trade.get('breakeven') and ((direction == 'BUY' and current_price >= tp1) or (direction == 'SELL' and current_price <= tp1)):
                 move_to_breakeven(trade_id)
 
-        # Trend monitoring
+        # Trend monitoring and alert notifications
         for symbol, users in user_alerts.items():
             df = get_twelve_data(symbol, TIMEFRAMES['analysis'])
             if df is None:
                 continue
-
             current_trend = determine_trend(df)
             if symbol in previous_trends and previous_trends[symbol] != current_trend:
                 notify_trend_change(symbol, current_trend, users)
@@ -124,8 +131,11 @@ def notify_trend_change(symbol, new_trend, users):
         send_whatsapp_alert(user, message)
 
 def send_whatsapp_alert(user, message):
-    # Implement your Twilio alert logic here
-    pass
+    client.messages.create(
+        from_=TWILIO_WHATSAPP_NUMBER,
+        body=message,
+        to=user
+    )
 
 # Start the scheduler once on the first request using a global flag
 scheduler_started = False
@@ -235,7 +245,7 @@ def analyze_price_action(symbol):
 # ======== WEB ENDPOINTS ========
 @app.route("/")
 def home():
-    return "ShadowFx Trading Bot - Operational"
+    return "Space Zero Trading Bot - Operational"
 
 @app.route("/webhook", methods=["POST"])
 def webhook():
@@ -243,23 +253,22 @@ def webhook():
     response = MessagingResponse()
     user_number = request.form.get("From")
 
+    # Help / Welcome message with all supported pairs
     if incoming_msg in ["HI", "HELLO", "START"]:
+        supported_pairs = ", ".join(SYMBOL_MAP.keys())
         response.message(
-            "📈 ShadowFx Trading Bot 📈\n"
-            "Supported Instruments:\n"
-            "• Forex: EURUSD, GBPUSD, USDJPY\n"
-            "• Commodities: XAUUSD, XAGUSD, CL1, NG1\n"
-            "• Indices: SPX, NDX, DJI\n"
-            "• Crypto: BTCUSD, ETHUSD\n"
-            "• ETFs: SPY\n"
-            "• Stocks: AAPL, TSLA\n\n"
-            "Commands:\n"
-            "➤ Analysis: XAUUSD\n"
-            "➤ Price: PRICE BTCUSD\n"
-            "➤ Alert: ALERT SPX"
+            f"📈 Space Zero Trading Bot 📈\n"
+            f"Supported Instruments: {supported_pairs}\n\n"
+            f"Commands:\n"
+            f"➤ Analysis: XAUUSD\n"
+            f"➤ Price: PRICE BTCUSD\n"
+            f"➤ Alert: ALERT SPX\n"
+            f"➤ Supported Pairs: PAIRS\n"
+            f"➤ Stop Alert: STOP ALERT XAUUSD"
         )
         return str(response)
 
+    # Price command
     if incoming_msg.startswith("PRICE "):
         symbol = incoming_msg.split(" ")[1]
         df = get_twelve_data(symbol, interval='1min')
@@ -267,6 +276,7 @@ def webhook():
         response.message(f"Current {symbol}: {price:.5f}" if price else "❌ Price unavailable")
         return str(response)
 
+    # Analysis command (by just sending the symbol)
     if incoming_msg in SYMBOL_MAP:
         symbol = incoming_msg
         analysis = analyze_price_action(symbol)
@@ -287,7 +297,7 @@ def webhook():
             msg = (f"📊 {analysis['symbol']} Analysis\n"
                    f"Signal: {analysis['signal']}\n"
                    f"Winrate: {analysis['winrate']}\n"
-                   f"M15 trend: {analysis['trend']}\n"
+                   f"M15 Trend: {analysis['trend']}\n"
                    f"Entry: {analysis['entry']:.5f}\n"
                    f"SL: {analysis['sl']:.5f}\n"
                    f"TP1: {analysis['tp1']:.5f}\n"
@@ -298,22 +308,42 @@ def webhook():
         response.message(msg)
         return str(response)
 
-    elif incoming_msg.startswith("ALERT "):
-        symbol = incoming_msg.split(" ")[1]
+    # Subscribe to alerts
+    if incoming_msg.startswith("ALERT "):
+        symbol = incoming_msg.split(" ")[1].upper()
         if symbol in SYMBOL_MAP:
             if symbol not in user_alerts:
                 user_alerts[symbol] = []
             if user_number not in user_alerts[symbol]:
                 user_alerts[symbol].append(user_number)
-                response.message(f"🔔 Alerts activated for {symbol}")
+                response.message(f"✅ You will now receive alerts for {symbol}")
             else:
-                response.message(f"🔔 Already receiving alerts for {symbol}")
+                response.message(f"⚠️ Already receiving alerts for {symbol}")
         else:
-            response.message("❌ Unsupported asset")
+            response.message("❌ Unsupported asset. Send 'PAIRS' to see supported instruments.")
         return str(response)
 
-    else:
-        response.message("❌ Invalid command. Send 'HI' for help")
+    # Unsubscribe from alerts
+    if incoming_msg.startswith("STOP ALERT "):
+        parts = incoming_msg.split(" ")
+        if len(parts) >= 3:
+            symbol = parts[2].upper()
+            if symbol in user_alerts and user_number in user_alerts[symbol]:
+                user_alerts[symbol].remove(user_number)
+                response.message(f"🚫 Alerts stopped for {symbol}")
+            else:
+                response.message(f"❌ No active alerts for {symbol}")
+        else:
+            response.message("❌ Invalid command format. Use: STOP ALERT XAUUSD")
+        return str(response)
+
+    # List supported pairs
+    if incoming_msg == "PAIRS":
+        supported_pairs = ", ".join(SYMBOL_MAP.keys())
+        response.message(f"✅ Supported Pairs: {supported_pairs}")
+        return str(response)
+
+    response.message("❌ Invalid command. Send 'HI' for help")
     return str(response)
 
 @app.route("/keep-alive")
