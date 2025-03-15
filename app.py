@@ -79,6 +79,11 @@ TIMEFRAMES = {
     'entry': '1min'
 }
 
+# ======== CACHE SETUP ========
+# Simple in-memory cache for Twelve Data API responses
+cache = {}
+CACHE_TTL = 60  # seconds
+
 # ======== MARKET MONITORING SYSTEM ========
 def check_market_conditions():
     with trade_lock:
@@ -153,6 +158,15 @@ def convert_symbol(symbol):
     return SYMBOL_MAP.get(symbol.upper(), {"symbol": symbol, "category": None})
 
 def get_twelve_data(symbol, interval='15min'):
+    global cache
+    key = (symbol, interval)
+    now = time.time()
+    # Check cache
+    if key in cache:
+        ts, cached_df = cache[key]
+        if now - ts < CACHE_TTL:
+            return cached_df
+
     try:
         config = convert_symbol(symbol)
         params = {
@@ -179,7 +193,10 @@ def get_twelve_data(symbol, interval='15min'):
             'close': 'close'
         }).sort_values('time', ascending=False)
 
-        return df.set_index('time').astype(float)
+        df = df.set_index('time').astype(float)
+        # Update cache
+        cache[key] = (now, df)
+        return df
     except Exception as e:
         print(f"Data Error ({symbol}): {str(e)}")
         return None
