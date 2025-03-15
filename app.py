@@ -11,7 +11,6 @@ import time
 from threading import Lock
 from apscheduler.schedulers.background import BackgroundScheduler
 
-# Initialize environment and app
 app = Flask(__name__)
 
 # ======== GLOBAL TRACKING SYSTEM ========
@@ -128,11 +127,16 @@ def send_whatsapp_alert(user, message):
     # Implement your Twilio alert logic here
     pass
 
-# Start the scheduler before the first request
-@app.before_first_request
-def start_scheduler():
-    scheduler.add_job(check_market_conditions, 'interval', minutes=5)
-    scheduler.start()
+# Start the scheduler once on the first request using a global flag
+scheduler_started = False
+
+@app.before_request
+def start_scheduler_once():
+    global scheduler_started
+    if not scheduler_started:
+        scheduler.add_job(check_market_conditions, 'interval', minutes=5)
+        scheduler.start()
+        scheduler_started = True
 
 # ======== CORE FUNCTIONS ========
 def convert_symbol(symbol):
