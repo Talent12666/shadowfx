@@ -33,7 +33,6 @@ scheduler = BackgroundScheduler()
 # ======== DERIV DATA CONFIGURATION ========
 DERIV_WS_URI = "wss://ws.derivws.com/websockets/v3?app_id=1089"  # Replace with your app_id if needed
 
-# Mapping from our timeframe strings to granularity (in seconds)
 GRANULARITY_MAP = {
     '15min': 900,
     '5min': 300,
@@ -238,7 +237,6 @@ def get_deriv_data(symbol, interval='15min'):
 def convert_symbol(symbol):
     symbol = symbol.upper()
     if symbol.startswith("VOLATILITY"):
-        # Remove "VOLATILITY" prefix; remainder is like "75" or "75S"
         remainder = symbol[len("VOLATILITY"):]
         if remainder.endswith("S"):
             key = remainder[:-1]
@@ -250,7 +248,6 @@ def convert_symbol(symbol):
         else:
             return {"symbol": symbol, "category": "synthetic"}
     elif symbol.startswith("JUMP"):
-        # Remove "JUMP" prefix; remainder is like "10", "25", etc.
         remainder = symbol[len("JUMP"):]
         code = SYMBOL_MAP["JUMP"].get(remainder)
         if code:
@@ -325,7 +322,6 @@ def calculate_winrate(data):
     changes = df_sorted['close'].pct_change().dropna()
     return f"{(len(changes[changes > 0]) / len(changes)) * 100:.1f}%"
 
-# ======== NEW STRATEGY: PURE PRICE ACTION ========
 def analyze_price_action(symbol):
     df_15m = get_deriv_data(symbol, TIMEFRAMES['analysis'])
     df_5m = get_deriv_data(symbol, TIMEFRAMES['sl'])
@@ -336,10 +332,8 @@ def analyze_price_action(symbol):
         return None
     if df_1m is None or df_1m.empty:
         return None
-    # Use previous 15min candle's high and low as reference
     prev_high = df_15m['high'].iloc[1]
     prev_low = df_15m['low'].iloc[1]
-    # Use current 1min candle's close as entry price
     current_price = df_1m['close'].iloc[0]
     signal = None
     if current_price > prev_high:
@@ -371,7 +365,6 @@ def analyze_price_action(symbol):
         'position_size': position_size
     }
 
-# ======== BACKTESTING MODULE ========
 def backtest_price_action(symbol):
     df = get_deriv_data(symbol, '15min')
     if df is None or len(df) < 2:
@@ -401,7 +394,6 @@ def backtest_price_action(symbol):
     win_rate = (sum(trades) / total_trades) * 100
     return {"win_rate": f"{win_rate:.1f}%", "total_trades": total_trades}
 
-# ======== WEB ENDPOINTS ========
 @app.route("/")
 def home():
     return (
@@ -431,7 +423,57 @@ def webhook():
         incoming_msg = request.form.get("Body", "").strip().upper()
         response = MessagingResponse()
         user_number = request.form.get("From")
-        if incoming_msg in ["HI", "HELLO", "START"]:
+        # Accept commands from our direct map or those starting with VOLATILITY or JUMP
+        if incoming_msg in SYMBOL_MAP or incoming_msg.startswith("VOLATILITY") or incoming_msg.startswith("JUMP"):
+            analysis = analyze_price_action(incoming_msg)
+            if analysis:
+                trade_id = f"{incoming_msg}_{int(time.time())}"
+                with trade_lock:
+                    active_trades[trade_id] = {
+                        'symbol': incoming_msg,
+                        'direction': analysis['signal'],
+                        'entry': analysis['entry'],
+                        'sl': analysis['sl'],
+                        'tp1': analysis['tp1'],
+                        'tp2': analysis['tp2'],
+                        'position_size': analysis['position_size'],
+                        'breakeven': False,
+                        'user': user_number
+                    }
+                msg = (f"📊 {analysis['symbol']} Analysis\n"
+                       f"Signal: {analysis['signal']}\n"
+                       f"Winrate: {analysis['winrate']}\n"
+                       f"Entry: {analysis['entry']:.5f}\n"
+                       f"SL: {analysis['sl']:.5f}\n"
+                       f"TP1: {analysis['tp1']:.5f}\n"
+                       f"TP2: {analysis['tp2']:.5f}")
+            else:
+                msg = f"No trading opportunity found for {incoming_msg}"
+            response.message(msg)
+            return str(response)
+        elif incoming_msg.startswith("PRICE "):
+            symbol = incoming_msg.split(" ")[1]
+            df = get_deriv_data(symbol, interval='1min')
+            if df is not None and not df.empty:
+                price = df['close'].iloc[0]
+                response.message(f"Current {symbol}: {price:.5f}")
+            else:
+                response.message("❌ Price unavailable")
+            return str(response)
+        elif incoming_msg.startswith("ALERT "):
+            symbol = incoming_msg.split(" ")[1]
+            if symbol in SYMBOL_MAP or symbol.startswith("VOLATILITY") or symbol.startswith("JUMP"):
+                if symbol not in user_alerts:
+                    user_alerts[symbol] = []
+                if user_number not in user_alerts[symbol]:
+                    user_alerts[symbol].append(user_number)
+                    response.message(f"🔔 Alerts activated for {symbol}")
+                else:
+                    response.message(f"🔔 Already receiving alerts for {symbol}")
+            else:
+                response.message("❌ Unsupported asset")
+            return str(response)
+        elif incoming_msg in ["HI", "HELLO", "START"]:
             response.message(
                 "📈 ShadowFx Trading Bot 📈\n"
                 "Supported Instruments:\n"
@@ -452,56 +494,6 @@ def webhook():
                 "➤ Price: PRICE BTCUSD\n"
                 "➤ Alert: ALERT BTCUSD"
             )
-            return str(response)
-        if incoming_msg.startswith("PRICE "):
-            symbol = incoming_msg.split(" ")[1]
-            df = get_deriv_data(symbol, interval='1min')
-            if df is not None and not df.empty:
-                price = df['close'].iloc[0]
-                response.message(f"Current {symbol}: {price:.5f}")
-            else:
-                response.message("❌ Price unavailable")
-            return str(response)
-        if incoming_msg in SYMBOL_MAP:
-            symbol = incoming_msg
-            analysis = analyze_price_action(symbol)
-            if analysis:
-                trade_id = f"{symbol}_{int(time.time())}"
-                with trade_lock:
-                    active_trades[trade_id] = {
-                        'symbol': symbol,
-                        'direction': analysis['signal'],
-                        'entry': analysis['entry'],
-                        'sl': analysis['sl'],
-                        'tp1': analysis['tp1'],
-                        'tp2': analysis['tp2'],
-                        'position_size': analysis['position_size'],
-                        'breakeven': False,
-                        'user': user_number
-                    }
-                msg = (f"📊 {analysis['symbol']} Analysis\n"
-                       f"Signal: {analysis['signal']}\n"
-                       f"Winrate: {analysis['winrate']}\n"
-                       f"Entry: {analysis['entry']:.5f}\n"
-                       f"SL: {analysis['sl']:.5f}\n"
-                       f"TP1: {analysis['tp1']:.5f}\n"
-                       f"TP2: {analysis['tp2']:.5f}")
-            else:
-                msg = f"No trading opportunity found for {symbol}"
-            response.message(msg)
-            return str(response)
-        elif incoming_msg.startswith("ALERT "):
-            symbol = incoming_msg.split(" ")[1]
-            if symbol in SYMBOL_MAP:
-                if symbol not in user_alerts:
-                    user_alerts[symbol] = []
-                if user_number not in user_alerts[symbol]:
-                    user_alerts[symbol].append(user_number)
-                    response.message(f"🔔 Alerts activated for {symbol}")
-                else:
-                    response.message(f"🔔 Already receiving alerts for {symbol}")
-            else:
-                response.message("❌ Unsupported asset")
             return str(response)
         else:
             response.message("❌ Invalid command. Send 'HI' for help")
