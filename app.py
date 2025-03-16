@@ -123,7 +123,8 @@ SYMBOL_MAP = {
              "10": "1HZ10V",
              "25": "1HZ25V",
              "50": "1HZ50V",
-             "75": "1HZ75V",
+             # Swap the 75 key: Standard now maps to "1HZ75SV"
+             "75": "1HZ75SV",
              "100": "1HZ100V",
              "150": "1HZ150V"
          },
@@ -131,7 +132,8 @@ SYMBOL_MAP = {
              "10": "1HZ10SV",
              "25": "1HZ25SV",
              "50": "1HZ50SV",
-             "75": "1HZ75SV",
+             # Swap the 75 key: Short-term now maps to "1HZ75V"
+             "75": "1HZ75V",
              "150": "1HZ150SV",
              "250": "1HZ250SV"
          }
@@ -423,7 +425,7 @@ def webhook():
         incoming_msg = request.form.get("Body", "").strip().upper()
         response = MessagingResponse()
         user_number = request.form.get("From")
-        # Accept commands from our direct map or those starting with VOLATILITY or JUMP
+        # Accept direct symbols or commands starting with VOLATILITY or JUMP
         if incoming_msg in SYMBOL_MAP or incoming_msg.startswith("VOLATILITY") or incoming_msg.startswith("JUMP"):
             analysis = analyze_price_action(incoming_msg)
             if analysis:
