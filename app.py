@@ -33,6 +33,7 @@ scheduler = BackgroundScheduler()
 # ======== DERIV DATA CONFIGURATION ========
 DERIV_WS_URI = "wss://ws.derivws.com/websockets/v3?app_id=1089"  # Replace with your app_id if needed
 
+# Mapping from our timeframe strings to granularity (in seconds)
 GRANULARITY_MAP = {
     '15min': 900,
     '5min': 300,
@@ -117,28 +118,34 @@ SYMBOL_MAP = {
     "CRASH600":  {"symbol": "CRASH600", "category": "synthetic"},
     "CRASH900":  {"symbol": "CRASH900", "category": "synthetic"},
 
-    # Synthetics - Volatility (Standard)
-    "VOLATILITY10":  {"symbol": "1HZ10V",  "category": "synthetic"},
-    "VOLATILITY25":  {"symbol": "1HZ25V",  "category": "synthetic"},
-    "VOLATILITY50":  {"symbol": "1HZ50V",  "category": "synthetic"},
-    "VOLATILITY75":  {"symbol": "1HZ75V",  "category": "synthetic"},
-    "VOLATILITY100": {"symbol": "1HZ100V", "category": "synthetic"},
-    "VOLATILITY150": {"symbol": "1HZ150V", "category": "synthetic"},
+    # Synthetics - Volatility (Grouped)
+    "VOLATILITY": {
+         "STANDARD": {
+             "10": "1HZ10V",
+             "25": "1HZ25V",
+             "50": "1HZ50V",
+             "75": "1HZ75V",
+             "100": "1HZ100V",
+             "150": "1HZ150V"
+         },
+         "SHORT": {
+             "10": "1HZ10SV",
+             "25": "1HZ25SV",
+             "50": "1HZ50SV",
+             "75": "1HZ75SV",
+             "150": "1HZ150SV",
+             "250": "1HZ250SV"
+         }
+    },
 
-    # Synthetics - Short-Term Volatility
-    "VOLATILITY10S":  {"symbol": "1HZ10SV",  "category": "synthetic"},
-    "VOLATILITY25S":  {"symbol": "1HZ25SV",  "category": "synthetic"},
-    "VOLATILITY50S":  {"symbol": "1HZ50SV",  "category": "synthetic"},
-    "VOLATILITY75S":  {"symbol": "1HZ75SV",  "category": "synthetic"},
-    "VOLATILITY150S": {"symbol": "1HZ150SV", "category": "synthetic"},
-    "VOLATILITY250S": {"symbol": "1HZ250SV", "category": "synthetic"},
-
-    # Synthetics - Jump Indices
-    "JUMP10":   {"symbol": "JD10",  "category": "synthetic"},
-    "JUMP25":   {"symbol": "JD25",  "category": "synthetic"},
-    "JUMP50":   {"symbol": "JD50",  "category": "synthetic"},
-    "JUMP75":   {"symbol": "JD75",  "category": "synthetic"},
-    "JUMP100":  {"symbol": "JD100", "category": "synthetic"}
+    # Synthetics - Jump Indices (Grouped)
+    "JUMP": {
+         "10": "JD10",
+         "25": "JD25",
+         "50": "JD50",
+         "75": "JD75",
+         "100": "JD100"
+    }
 }
 
 TIMEFRAMES = {
@@ -227,6 +234,32 @@ def get_deriv_data(symbol, interval='15min'):
         logger.error(f"Data Error ({symbol}): {str(e)}")
         return None
 
+# Custom convert_symbol to handle nested volatility and jump mappings
+def convert_symbol(symbol):
+    symbol = symbol.upper()
+    if symbol.startswith("VOLATILITY"):
+        # Remove "VOLATILITY" prefix; remainder is like "75" or "75S"
+        remainder = symbol[len("VOLATILITY"):]
+        if remainder.endswith("S"):
+            key = remainder[:-1]
+            code = SYMBOL_MAP["VOLATILITY"]["SHORT"].get(key)
+        else:
+            code = SYMBOL_MAP["VOLATILITY"]["STANDARD"].get(remainder)
+        if code:
+            return {"symbol": code, "category": "synthetic"}
+        else:
+            return {"symbol": symbol, "category": "synthetic"}
+    elif symbol.startswith("JUMP"):
+        # Remove "JUMP" prefix; remainder is like "10", "25", etc.
+        remainder = symbol[len("JUMP"):]
+        code = SYMBOL_MAP["JUMP"].get(remainder)
+        if code:
+            return {"symbol": code, "category": "synthetic"}
+        else:
+            return {"symbol": symbol, "category": "synthetic"}
+    else:
+        return SYMBOL_MAP.get(symbol, {"symbol": symbol, "category": None})
+
 # ======== MARKET MONITORING SYSTEM ========
 def check_market_conditions():
     with trade_lock:
@@ -285,9 +318,6 @@ def send_whatsapp_alert(user, message):
 scheduler.add_job(check_market_conditions, 'interval', minutes=1)
 
 # ======== CORE FUNCTIONS ========
-def convert_symbol(symbol):
-    return SYMBOL_MAP.get(symbol.upper(), {"symbol": symbol, "category": None})
-
 def calculate_winrate(data):
     if len(data) < 100:
         return "N/A"
@@ -403,7 +433,7 @@ def webhook():
         user_number = request.form.get("From")
         if incoming_msg in ["HI", "HELLO", "START"]:
             response.message(
-                "📈 Space_Zero 2.0 Trading Bot 📈\n"
+                "📈 ShadowFx Trading Bot 📈\n"
                 "Supported Instruments:\n"
                 "• Forex: EURUSD, GBPUSD, USDJPY, AUDUSD, USDCAD, USDCHF, NZDUSD, EURGBP, USDSEK, USDNOK, USDTRY, EURJPY, GBPJPY\n"
                 "• Commodities: XAUUSD, XAGUSD, CL1, NG1, CO1, HG1\n"
