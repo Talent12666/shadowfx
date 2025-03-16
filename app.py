@@ -1,5 +1,3 @@
-use the code below to create is 
-
 import os
 import time
 import json
