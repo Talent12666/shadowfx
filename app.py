@@ -190,6 +190,10 @@ async def async_get_deriv_data(symbol, interval='15min'):
             await websocket.send(json.dumps(request_payload))
             response = await websocket.recv()
             data = json.loads(response)
+            # Check for errors in the response
+            if "error" in data:
+                logger.error(f"Deriv API error for {symbol}: {data.get('error', 'Unknown error')}")
+                return None
             if "candles" in data:
                 candles = data["candles"]
                 df = pd.DataFrame(candles)
@@ -200,7 +204,7 @@ async def async_get_deriv_data(symbol, interval='15min'):
                 df = df.astype(float)
                 return df
             else:
-                logger.error(f"Deriv API error for {symbol}: {data.get('error', 'Unknown error')}")
+                logger.error(f"Unexpected response for {symbol}: {data}")
                 return None
     except Exception as e:
         logger.error(f"Error connecting to Deriv WebSocket for {symbol}: {str(e)}")
@@ -209,7 +213,8 @@ async def async_get_deriv_data(symbol, interval='15min'):
 def get_deriv_data(symbol, interval='15min'):
     try:
         config = convert_symbol(symbol)
-        return asyncio.run(async_get_deriv_data(config["symbol"], interval))
+        # Use a 10-second timeout to avoid long waits that can block Flask workers.
+        return asyncio.run(asyncio.wait_for(async_get_deriv_data(config["symbol"], interval), timeout=10))
     except Exception as e:
         logger.error(f"Data Error ({symbol}): {str(e)}")
         return None
@@ -279,7 +284,7 @@ def analyze_price_action(symbol):
     if not signal:
         return None
 
-    # Special handling for XAUUSD
+    # Special handling for XAUUSD: update entry price from current minute data.
     if symbol == "XAUUSD":
         current_df = get_deriv_data(symbol, '1min')
         if current_df is not None and not current_df.empty:
@@ -326,12 +331,11 @@ def webhook():
                 for symbol in symbols:
                     analysis = analyze_price_action(symbol)
                     if analysis:
-                        # Special handling for XAUUSD entry price
+                        # Update entry price for XAUUSD
                         if symbol == "XAUUSD":
                             df_1m = get_deriv_data(symbol, TIMEFRAMES['entry'])
                             if df_1m is not None and not df_1m.empty:
                                 analysis['entry'] = df_1m['close'].iloc[0]
-                        
                         msg = (f"📊 {analysis['symbol']} Analysis\n"
                                f"Signal: {analysis['signal']}\n"
                                f"Winrate: {analysis['winrate']}\n"
