@@ -163,7 +163,8 @@ async def async_get_deriv_data(symbol, interval='15min'):
         "adjust_start_time": 1,
         "count": 200,
         "end": "latest",
-        "granularity": granularity
+        "granularity": granularity,
+        "style": "candles"  # Ensures candle data is returned.
     }
     try:
         async with websockets.connect(DERIV_WS_URI) as websocket:
