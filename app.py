@@ -1,3 +1,5 @@
+use the code below to create is 
+
 import os
 import time
 import json
@@ -57,8 +59,7 @@ SYMBOL_MAP = {
     "GBPJPY": {"symbol": "frxGBPJPY", "category": "forex"},
 
     # Commodities
-    # For XAUUSD, we set "data_style" to "ticks" so we get real-time price entries.
-    "XAUUSD": {"symbol": "WLDAUD", "category": "commodity", "data_style": "ticks"},
+    "XAUUSD": {"symbol": "WLDAUD", "category": "commodity"},  # Gold/AUD
     "XAGUSD": {"symbol": "SILVER", "category": "commodity"},   # Silver
     "CL1":    {"symbol": "CL_BRENT", "category": "commodity"},  # Brent Crude Oil
     "NG1":    {"symbol": "NG_HEN", "category": "commodity"},    # Natural Gas
@@ -124,7 +125,8 @@ SYMBOL_MAP = {
              "10": "1HZ10V",
              "25": "1HZ25V",
              "50": "1HZ50V",
-             "75": "1HZ75V",   # Standard volatility now correctly maps to "1HZ75V"
+             # Swap the 75 key: Standard now maps to "1HZ75SV"
+             "75": "1HZ75SV",
              "100": "1HZ100V",
              "150": "1HZ150V"
          },
@@ -132,7 +134,8 @@ SYMBOL_MAP = {
              "10": "1HZ10SV",
              "25": "1HZ25SV",
              "50": "1HZ50SV",
-             "75": "1HZ75SV",  # Short-Term volatility now correctly maps to "1HZ75SV"
+             # Swap the 75 key: Short-term now maps to "1HZ75V"
+             "75": "1HZ75V",
              "150": "1HZ150SV",
              "250": "1HZ250SV"
          }
@@ -165,7 +168,7 @@ def calculate_position_size(account_balance, risk_percentage, stop_loss_distance
     return risk_amount / stop_loss_distance
 
 # ======== DERIV WEBSOCKET DATA FUNCTIONALITY ========
-async def async_get_deriv_data(symbol, interval='15min', data_style="candles"):
+async def async_get_deriv_data(symbol, interval='15min'):
     granularity = GRANULARITY_MAP.get(interval, 60)
     request_payload = {
         "ticks_history": symbol,
@@ -173,7 +176,7 @@ async def async_get_deriv_data(symbol, interval='15min', data_style="candles"):
         "count": 200,
         "end": "latest",
         "granularity": granularity,
-        "style": data_style
+        "style": "candles"
     }
     try:
         async with websockets.connect(DERIV_WS_URI) as websocket:
@@ -229,7 +232,7 @@ def get_deriv_data(symbol, interval='15min'):
             if config["symbol"] not in active_symbols:
                 logger.error(f"Symbol {config['symbol']} not active.")
                 return None
-        return asyncio.run(async_get_deriv_data(config["symbol"], interval, config.get("data_style", "candles")))
+        return asyncio.run(async_get_deriv_data(config["symbol"], interval))
     except Exception as e:
         logger.error(f"Data Error ({symbol}): {str(e)}")
         return None
