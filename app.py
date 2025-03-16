@@ -31,11 +31,10 @@ trade_lock = Lock()
 scheduler = BackgroundScheduler()
 
 # ======== DERIV DATA CONFIGURATION ========
-# We'll request historical candle data via Deriv's WebSocket API.
-# Deriv expects a "ticks_history" request.
+# We'll request historical candle data via Deriv's WebSocket API using the "ticks_history" call.
 DERIV_WS_URI = "wss://ws.derivws.com/websockets/v3?app_id=1089"
 
-# Mapping from our timeframe strings to granularity in seconds
+# Mapping from our timeframe strings to granularity (in seconds)
 GRANULARITY_MAP = {
     '15min': 900,
     '5min': 300,
@@ -43,7 +42,7 @@ GRANULARITY_MAP = {
 }
 
 # ======== SYMBOL MAPPING ========
-# Updated mappings include all synthetics as they are on Deriv.
+# All supported instruments are mapped to Deriv's symbol format.
 SYMBOL_MAP = {
     # Forex
     "EURUSD": {"symbol": "frxEURUSD", "category": "forex"},
@@ -134,7 +133,7 @@ SYMBOL_MAP = {
     "VOLATILITY150S": {"symbol": "volatility150s", "category": "synthetic"},
     "VOLATILITY250S": {"symbol": "volatility250s", "category": "synthetic"},
 
-    # Synthetics - Jumps (if applicable)
+    # Synthetics - Jumps
     "JUMPS": {"symbol": "jumps", "category": "synthetic"}
 }
 
@@ -145,7 +144,7 @@ TIMEFRAMES = {
 }
 
 # ======== RISK MANAGEMENT CONFIG ========
-# (Position size calculation remains internal.)
+# (Position size is calculated internally and not sent in responses.)
 DEFAULT_ACCOUNT_BALANCE = float(os.getenv("ACCOUNT_BALANCE", 10000))
 RISK_PERCENTAGE = float(os.getenv("RISK_PERCENTAGE", 1))  # 1%
 
@@ -159,8 +158,6 @@ def calculate_position_size(account_balance, risk_percentage, stop_loss_distance
 # ======== DERIV WEBSOCKET DATA FUNCTIONALITY ========
 async def async_get_deriv_data(symbol, interval='15min'):
     granularity = GRANULARITY_MAP.get(interval, 60)
-    # Prepare a request using the "ticks_history" call.
-    # (Note: Deriv's API may return candles data under a "candles" field.)
     request_payload = {
         "ticks_history": symbol,
         "adjust_start_time": 1,
@@ -175,7 +172,6 @@ async def async_get_deriv_data(symbol, interval='15min'):
             data = json.loads(response)
             if "candles" in data:
                 candles = data["candles"]
-                # Build DataFrame from candle data.
                 df = pd.DataFrame(candles)
                 df['time'] = pd.to_datetime(df['epoch'], unit='s')
                 df = df[['time', 'open', 'high', 'low', 'close']]
@@ -192,8 +188,8 @@ async def async_get_deriv_data(symbol, interval='15min'):
 
 def get_deriv_data(symbol, interval='15min'):
     try:
-        # Run the asynchronous function in a synchronous context.
-        return asyncio.run(async_get_deriv_data(symbol, interval))
+        config = convert_symbol(symbol)
+        return asyncio.run(async_get_deriv_data(config["symbol"], interval))
     except Exception as e:
         logger.error(f"Data Error ({symbol}): {str(e)}")
         return None
@@ -202,21 +198,17 @@ def get_deriv_data(symbol, interval='15min'):
 def check_market_conditions():
     with trade_lock:
         try:
-            # Monitor active trades using the latest 1-minute candle data from Deriv.
             for trade_id in list(active_trades.keys()):
                 trade = active_trades[trade_id]
                 df = get_deriv_data(trade['symbol'], '1min')
                 if df is None or df.empty:
                     continue
-
                 current_price = df['close'].iloc[0]
                 direction = trade['direction']
                 entry = trade['entry']
                 sl = trade['sl']
                 tp1 = trade['tp1']
                 tp2 = trade['tp2']
-
-                # Check SL and TP conditions.
                 if (direction == 'BUY' and current_price <= sl) or (direction == 'SELL' and current_price >= sl):
                     logger.info(f"SL hit for trade {trade_id}")
                     handle_sl_hit(trade_id)
@@ -257,7 +249,6 @@ def send_whatsapp_alert(user, message):
     logger.info(f"Sending alert to {user}: {message}")
     pass
 
-# Schedule market monitoring every minute.
 scheduler.add_job(check_market_conditions, 'interval', minutes=1)
 
 # ======== CORE FUNCTIONS ========
@@ -276,22 +267,17 @@ def analyze_price_action(symbol):
     df_15m = get_deriv_data(symbol, TIMEFRAMES['analysis'])
     df_5m = get_deriv_data(symbol, TIMEFRAMES['sl'])
     df_1m = get_deriv_data(symbol, TIMEFRAMES['entry'])
-
     if df_15m is None or len(df_15m) < 2:
         return None
     if df_5m is None or df_5m.empty:
         return None
     if df_1m is None or df_1m.empty:
         return None
-
-    # Pure Price Action: Breakout of previous candle's range.
     last_close = df_15m['close'].iloc[0]
     prev_high = df_15m['high'].iloc[1]
     prev_low = df_15m['low'].iloc[1]
-
     signal = None
     if last_close > prev_high:
-        # Bullish breakout.
         entry = last_close
         sl = prev_low
         risk = entry - sl
@@ -299,21 +285,16 @@ def analyze_price_action(symbol):
         tp2 = entry + 4 * risk
         signal = ('BUY', entry, sl, tp1, tp2)
     elif last_close < prev_low:
-        # Bearish breakout.
         entry = last_close
         sl = prev_high
         risk = sl - entry
         tp1 = entry - 2 * risk
         tp2 = entry - 4 * risk
         signal = ('SELL', entry, sl, tp1, tp2)
-
     if not signal:
         return None
-
-    # Calculate position size internally (not sent in the message)
     stop_loss_distance = abs(signal[1] - signal[2])
     position_size = calculate_position_size(DEFAULT_ACCOUNT_BALANCE, RISK_PERCENTAGE, stop_loss_distance)
-
     return {
         'symbol': symbol,
         'signal': signal[0],
@@ -335,7 +316,6 @@ def backtest_price_action(symbol):
     for i in range(1, len(df_sorted)):
         prev = df_sorted.iloc[i - 1]
         current = df_sorted.iloc[i]
-        # Bullish breakout signal.
         if current['close'] > prev['high']:
             entry = current['close']
             sl = prev['low']
@@ -343,7 +323,6 @@ def backtest_price_action(symbol):
             tp1 = entry + 2 * risk
             win = current['close'] >= tp1
             trades.append(win)
-        # Bearish breakout signal.
         elif current['close'] < prev['low']:
             entry = current['close']
             sl = prev['high']
@@ -360,7 +339,6 @@ def backtest_price_action(symbol):
 # ======== WEB ENDPOINTS ========
 @app.route("/")
 def home():
-    # Updated greeting message to include all synthetics.
     return (
         "ShadowFx Trading Bot - Operational\n"
         "Supported Instruments:\n"
@@ -383,7 +361,6 @@ def webhook():
         incoming_msg = request.form.get("Body", "").strip().upper()
         response = MessagingResponse()
         user_number = request.form.get("From")
-
         if incoming_msg in ["HI", "HELLO", "START"]:
             response.message(
                 "📈 ShadowFx Trading Bot 📈\n"
@@ -401,7 +378,6 @@ def webhook():
                 "➤ Alert: ALERT SPX"
             )
             return str(response)
-
         if incoming_msg.startswith("PRICE "):
             symbol = incoming_msg.split(" ")[1]
             df = get_deriv_data(symbol, interval='1min')
@@ -411,11 +387,9 @@ def webhook():
             else:
                 response.message("❌ Price unavailable")
             return str(response)
-
         if incoming_msg in SYMBOL_MAP:
             symbol = incoming_msg
             analysis = analyze_price_action(symbol)
-
             if analysis:
                 trade_id = f"{symbol}_{int(time.time())}"
                 with trade_lock:
@@ -430,8 +404,6 @@ def webhook():
                         'breakeven': False,
                         'user': user_number
                     }
-
-                # Removed Strategy and Position Size details from the message.
                 msg = (f"📊 {analysis['symbol']} Analysis\n"
                        f"Signal: {analysis['signal']}\n"
                        f"Winrate: {analysis['winrate']}\n"
@@ -441,10 +413,8 @@ def webhook():
                        f"TP2: {analysis['tp2']:.5f}")
             else:
                 msg = f"No trading opportunity found for {symbol}"
-
             response.message(msg)
             return str(response)
-
         elif incoming_msg.startswith("ALERT "):
             symbol = incoming_msg.split(" ")[1]
             if symbol in SYMBOL_MAP:
@@ -458,7 +428,6 @@ def webhook():
             else:
                 response.message("❌ Unsupported asset")
             return str(response)
-
         else:
             response.message("❌ Invalid command. Send 'HI' for help")
         return str(response)
@@ -480,7 +449,6 @@ def backtest():
 def keep_alive():
     return "OK"
 
-# ======== ENTRY POINT ========
 if __name__ == "__main__":
     try:
         scheduler.start()
