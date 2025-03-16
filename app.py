@@ -15,7 +15,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 # Load environment variables
 load_dotenv()
 
-# Setup logging
+# Setup logging for improved system robustness
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -33,6 +33,7 @@ scheduler = BackgroundScheduler()
 # ======== DERIV DATA CONFIGURATION ========
 DERIV_WS_URI = "wss://ws.derivws.com/websockets/v3?app_id=1089"  # Replace with your app_id if needed
 
+# Mapping from our timeframe strings to granularity (in seconds)
 GRANULARITY_MAP = {
     '15min': 900,
     '5min': 300,
@@ -390,7 +391,7 @@ def home():
         "   - Short-Term Volatility: VOLATILITY10S, VOLATILITY25S, VOLATILITY50S, VOLATILITY75S, VOLATILITY150S, VOLATILITY250S\n"
         "   - Jump Indices: JUMPS10, JUMPS25, JUMPS50, JUMPS75, JUMPS100\n\n"
         "Commands:\n"
-        "➤ Analysis: BTCUSD\n"
+        "➤ Analysis: EURUSD\n"
         "➤ Price: PRICE BTCUSD\n"
         "➤ Alert: ALERT BTCUSD"
     )
@@ -405,12 +406,20 @@ def webhook():
             response.message(
                 "📈 ShadowFx Trading Bot 📈\n"
                 "Supported Instruments:\n"
+                "• Forex: EURUSD, GBPUSD, USDJPY, AUDUSD, USDCAD, USDCHF, NZDUSD, EURGBP, USDSEK, USDNOK, USDTRY, EURJPY, GBPJPY\n"
+                "• Commodities: XAUUSD, XAGUSD, CL1, NG1, CO1, HG1\n"
+                "• Indices: SPX, NDX, DJI, FTSE, DAX, NIKKEI, HSI, ASX, CAC\n"
                 "• Crypto: BTCUSD, ETHUSD, XRPUSD, LTCUSD, BCHUSD, ADAUSD, DOTUSD, SOLUSD\n"
-                "• Jump Indices: JUMPS10, JUMPS25, JUMPS50, JUMPS75, JUMPS100\n"
-                "• Volatility Indices (Standard): VOLATILITY10, VOLATILITY25, VOLATILITY50, VOLATILITY75, VOLATILITY100, VOLATILITY150\n"
-                "• Short-Term Volatility: VOLATILITY10S, VOLATILITY25S, VOLATILITY50S, VOLATILITY75S, VOLATILITY150S, VOLATILITY250S\n\n"
+                "• ETFs: SPY, QQQ, GLD, XLF, IWM, EEM\n"
+                "• Stocks: AAPL, TSLA, AMZN, GOOGL, MSFT, META, NVDA, NFLX\n"
+                "• Synthetics:\n"
+                "   - Boom: BOOM1000, BOOM300, BOOM500, BOOM600, BOOM900\n"
+                "   - Crash: CRASH1000, CRASH300, CRASH500, CRASH600, CRASH900\n"
+                "   - Volatility (Standard): VOLATILITY10, VOLATILITY25, VOLATILITY50, VOLATILITY75, VOLATILITY100, VOLATILITY150\n"
+                "   - Short-Term Volatility: VOLATILITY10S, VOLATILITY25S, VOLATILITY50S, VOLATILITY75S, VOLATILITY150S, VOLATILITY250S\n"
+                "   - Jump Indices: JUMPS10, JUMPS25, JUMPS50, JUMPS75, JUMPS100\n\n"
                 "Commands:\n"
-                "➤ Analysis: BTCUSD\n"
+                "➤ Analysis: EURUSD\n"
                 "➤ Price: PRICE BTCUSD\n"
                 "➤ Alert: ALERT BTCUSD"
             )
