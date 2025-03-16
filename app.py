@@ -1,11 +1,13 @@
 import os
 import time
+import json
+import asyncio
 import logging
 from threading import Lock
 from dotenv import load_dotenv
 from flask import Flask, request, jsonify
 from twilio.twiml.messaging_response import MessagingResponse
-import requests
+import websockets
 import pandas as pd
 import pandas_ta as ta
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -28,74 +30,112 @@ previous_trends = {}
 trade_lock = Lock()
 scheduler = BackgroundScheduler()
 
-# ======== TWELVE DATA CONFIGURATION ========
-TWELVE_API_KEY = os.getenv('TWELVE_API_KEY')
+# ======== DERIV DATA CONFIGURATION ========
+# We'll request historical candle data via Deriv's WebSocket API.
+# Deriv expects a "ticks_history" request.
+DERIV_WS_URI = "wss://ws.derivws.com/websockets/v3?app_id=1089"
 
-# Map all supported instruments
+# Mapping from our timeframe strings to granularity in seconds
+GRANULARITY_MAP = {
+    '15min': 900,
+    '5min': 300,
+    '1min': 60
+}
+
+# ======== SYMBOL MAPPING ========
+# Updated mappings include all synthetics as they are on Deriv.
 SYMBOL_MAP = {
     # Forex
-    "EURUSD": {"symbol": "EUR/USD", "category": "forex"},
-    "GBPUSD": {"symbol": "GBP/USD", "category": "forex"},
-    "USDJPY": {"symbol": "USD/JPY", "category": "forex"},
-    "AUDUSD": {"symbol": "AUD/USD", "category": "forex"},
-    "USDCAD": {"symbol": "USD/CAD", "category": "forex"},
-    "USDCHF": {"symbol": "USD/CHF", "category": "forex"},
-    "NZDUSD": {"symbol": "NZD/USD", "category": "forex"},
-    "EURGBP": {"symbol": "EUR/GBP", "category": "forex"},
-    "USDSEK": {"symbol": "USD/SEK", "category": "forex"},
-    "USDNOK": {"symbol": "USD/NOK", "category": "forex"},
-    "USDTRY": {"symbol": "USD/TRY", "category": "forex"},
-    "EURJPY": {"symbol": "EUR/JPY", "category": "forex"},
-    "GBPJPY": {"symbol": "GBP/JPY", "category": "forex"},
+    "EURUSD": {"symbol": "frxEURUSD", "category": "forex"},
+    "GBPUSD": {"symbol": "frxGBPUSD", "category": "forex"},
+    "USDJPY": {"symbol": "frxUSDJPY", "category": "forex"},
+    "AUDUSD": {"symbol": "frxAUDUSD", "category": "forex"},
+    "USDCAD": {"symbol": "frxUSDCAD", "category": "forex"},
+    "USDCHF": {"symbol": "frxUSDCHF", "category": "forex"},
+    "NZDUSD": {"symbol": "frxNZDUSD", "category": "forex"},
+    "EURGBP": {"symbol": "frxEURGBP", "category": "forex"},
+    "USDSEK": {"symbol": "frxUSDSEK", "category": "forex"},
+    "USDNOK": {"symbol": "frxUSDNOK", "category": "forex"},
+    "USDTRY": {"symbol": "frxUSDTRY", "category": "forex"},
+    "EURJPY": {"symbol": "frxEURJPY", "category": "forex"},
+    "GBPJPY": {"symbol": "frxGBPJPY", "category": "forex"},
 
     # Commodities
-    "XAUUSD": {"symbol": "XAU/USD", "category": "commodity"},
-    "XAGUSD": {"symbol": "XAG/USD", "category": "commodity"},
-    "XPTUSD": {"symbol": "XPT/USD", "category": "commodity"},
-    "XPDUSD": {"symbol": "XPD/USD", "category": "commodity"},
-    "CL1":    {"symbol": "CL1", "category": "commodity"},
-    "NG1":    {"symbol": "NG1", "category": "commodity"},
-    "CO1":    {"symbol": "CO1", "category": "commodity"},
-    "HG1":    {"symbol": "HG1", "category": "commodity"},
+    "XAUUSD": {"symbol": "gold", "category": "commodity"},
+    "XAGUSD": {"symbol": "silver", "category": "commodity"},
+    "XPTUSD": {"symbol": "platinum", "category": "commodity"},
+    "XPDUSD": {"symbol": "palladium", "category": "commodity"},
+    "CL1":    {"symbol": "crude_oil", "category": "commodity"},
+    "NG1":    {"symbol": "natural_gas", "category": "commodity"},
+    "CO1":    {"symbol": "coal", "category": "commodity"},
+    "HG1":    {"symbol": "copper", "category": "commodity"},
 
     # Indices
-    "SPX":    {"symbol": "SPX", "category": "index"},
-    "NDX":    {"symbol": "NDX", "category": "index"},
-    "DJI":    {"symbol": "DJI", "category": "index"},
-    "FTSE":   {"symbol": "FTSE", "category": "index"},
-    "DAX":    {"symbol": "DAX", "category": "index"},
-    "NIKKEI": {"symbol": "NIKKEI", "category": "index"},
-    "HSI":    {"symbol": "HSI", "category": "index"},
-    "ASX":    {"symbol": "ASX", "category": "index"},
-    "CAC":    {"symbol": "CAC", "category": "index"},
+    "SPX":    {"symbol": "indices_us", "category": "index"},
+    "NDX":    {"symbol": "indices_nasdaq", "category": "index"},
+    "DJI":    {"symbol": "indices_dow_jones", "category": "index"},
+    "FTSE":   {"symbol": "indices_ftse", "category": "index"},
+    "DAX":    {"symbol": "indices_dax", "category": "index"},
+    "NIKKEI": {"symbol": "indices_nikkei", "category": "index"},
+    "HSI":    {"symbol": "indices_hsi", "category": "index"},
+    "ASX":    {"symbol": "indices_asx", "category": "index"},
+    "CAC":    {"symbol": "indices_cac", "category": "index"},
 
     # Crypto
-    "BTCUSD": {"symbol": "BTC/USD", "category": "crypto"},
-    "ETHUSD": {"symbol": "ETH/USD", "category": "crypto"},
-    "XRPUSD": {"symbol": "XRP/USD", "category": "crypto"},
-    "LTCUSD": {"symbol": "LTC/USD", "category": "crypto"},
-    "BCHUSD": {"symbol": "BCH/USD", "category": "crypto"},
-    "ADAUSD": {"symbol": "ADA/USD", "category": "crypto"},
-    "DOTUSD": {"symbol": "DOT/USD", "category": "crypto"},
-    "SOLUSD": {"symbol": "SOL/USD", "category": "crypto"},
+    "BTCUSD": {"symbol": "cryptoBTCUSD", "category": "crypto"},
+    "ETHUSD": {"symbol": "cryptoETHUSD", "category": "crypto"},
+    "XRPUSD": {"symbol": "cryptoXRPUSD", "category": "crypto"},
+    "LTCUSD": {"symbol": "cryptoLTCUSD", "category": "crypto"},
+    "BCHUSD": {"symbol": "cryptoBCHUSD", "category": "crypto"},
+    "ADAUSD": {"symbol": "cryptoADAUSD", "category": "crypto"},
+    "DOTUSD": {"symbol": "cryptoDOTUSD", "category": "crypto"},
+    "SOLUSD": {"symbol": "cryptoSOLUSD", "category": "crypto"},
 
     # ETFs
-    "SPY": {"symbol": "SPY", "category": "etf"},
-    "QQQ": {"symbol": "QQQ", "category": "etf"},
-    "GLD": {"symbol": "GLD", "category": "etf"},
-    "XLF": {"symbol": "XLF", "category": "etf"},
-    "IWM": {"symbol": "IWM", "category": "etf"},
-    "EEM": {"symbol": "EEM", "category": "etf"},
+    "SPY": {"symbol": "etfSPY", "category": "etf"},
+    "QQQ": {"symbol": "etfQQQ", "category": "etf"},
+    "GLD": {"symbol": "etfGLD", "category": "etf"},
+    "XLF": {"symbol": "etfXLF", "category": "etf"},
+    "IWM": {"symbol": "etfIWM", "category": "etf"},
+    "EEM": {"symbol": "etfEEM", "category": "etf"},
 
     # Stocks
-    "AAPL":  {"symbol": "AAPL", "category": "stock"},
-    "TSLA":  {"symbol": "TSLA", "category": "stock"},
-    "AMZN":  {"symbol": "AMZN", "category": "stock"},
-    "GOOGL": {"symbol": "GOOGL", "category": "stock"},
-    "MSFT":  {"symbol": "MSFT", "category": "stock"},
-    "META":  {"symbol": "META", "category": "stock"},
-    "NVDA":  {"symbol": "NVDA", "category": "stock"},
-    "NFLX":  {"symbol": "NFLX", "category": "stock"}
+    "AAPL":  {"symbol": "stockAAPL", "category": "stock"},
+    "TSLA":  {"symbol": "stockTSLA", "category": "stock"},
+    "AMZN":  {"symbol": "stockAMZN", "category": "stock"},
+    "GOOGL": {"symbol": "stockGOOGL", "category": "stock"},
+    "MSFT":  {"symbol": "stockMSFT", "category": "stock"},
+    "META":  {"symbol": "stockMETA", "category": "stock"},
+    "NVDA":  {"symbol": "stockNVDA", "category": "stock"},
+    "NFLX":  {"symbol": "stockNFLX", "category": "stock"},
+
+    # Synthetics - Boom
+    "BOOM1000": {"symbol": "boom1000", "category": "synthetic"},
+    "BOOM300":  {"symbol": "boom300",  "category": "synthetic"},
+    "BOOM500":  {"symbol": "boom500",  "category": "synthetic"},
+    "BOOM600":  {"symbol": "boom600",  "category": "synthetic"},
+    "BOOM900":  {"symbol": "boom900",  "category": "synthetic"},
+
+    # Synthetics - Crash
+    "CRASH1000": {"symbol": "crash1000", "category": "synthetic"},
+    "CRASH300":  {"symbol": "crash300",  "category": "synthetic"},
+    "CRASH500":  {"symbol": "crash500",  "category": "synthetic"},
+    "CRASH600":  {"symbol": "crash600",  "category": "synthetic"},
+    "CRASH900":  {"symbol": "crash900",  "category": "synthetic"},
+
+    # Synthetics - Volatility
+    "VOLATILITY100":  {"symbol": "volatility100",  "category": "synthetic"},
+    "VOLATILITY75":   {"symbol": "volatility75",   "category": "synthetic"},
+    "VOLATILITY50":   {"symbol": "volatility50",   "category": "synthetic"},
+    "VOLATILITY10":   {"symbol": "volatility10",   "category": "synthetic"},
+    "VOLATILITY25":   {"symbol": "volatility25",   "category": "synthetic"},
+    "VOLATILITY75S":  {"symbol": "volatility75s",  "category": "synthetic"},
+    "VOLATILITY50S":  {"symbol": "volatility50s",  "category": "synthetic"},
+    "VOLATILITY150S": {"symbol": "volatility150s", "category": "synthetic"},
+    "VOLATILITY250S": {"symbol": "volatility250s", "category": "synthetic"},
+
+    # Synthetics - Jumps (if applicable)
+    "JUMPS": {"symbol": "jumps", "category": "synthetic"}
 }
 
 TIMEFRAMES = {
@@ -105,6 +145,7 @@ TIMEFRAMES = {
 }
 
 # ======== RISK MANAGEMENT CONFIG ========
+# (Position size calculation remains internal.)
 DEFAULT_ACCOUNT_BALANCE = float(os.getenv("ACCOUNT_BALANCE", 10000))
 RISK_PERCENTAGE = float(os.getenv("RISK_PERCENTAGE", 1))  # 1%
 
@@ -115,14 +156,56 @@ def calculate_position_size(account_balance, risk_percentage, stop_loss_distance
     position_size = risk_amount / stop_loss_distance
     return position_size
 
+# ======== DERIV WEBSOCKET DATA FUNCTIONALITY ========
+async def async_get_deriv_data(symbol, interval='15min'):
+    granularity = GRANULARITY_MAP.get(interval, 60)
+    # Prepare a request using the "ticks_history" call.
+    # (Note: Deriv's API may return candles data under a "candles" field.)
+    request_payload = {
+        "ticks_history": symbol,
+        "adjust_start_time": 1,
+        "count": 200,
+        "end": "latest",
+        "granularity": granularity
+    }
+    try:
+        async with websockets.connect(DERIV_WS_URI) as websocket:
+            await websocket.send(json.dumps(request_payload))
+            response = await websocket.recv()
+            data = json.loads(response)
+            if "candles" in data:
+                candles = data["candles"]
+                # Build DataFrame from candle data.
+                df = pd.DataFrame(candles)
+                df['time'] = pd.to_datetime(df['epoch'], unit='s')
+                df = df[['time', 'open', 'high', 'low', 'close']]
+                df = df.sort_values('time', ascending=False)
+                df = df.set_index('time')
+                df = df.astype(float)
+                return df
+            else:
+                logger.error(f"Deriv API error for {symbol}: {data.get('error', 'Unknown error')}")
+                return None
+    except Exception as e:
+        logger.error(f"Error connecting to Deriv WebSocket for {symbol}: {str(e)}")
+        return None
+
+def get_deriv_data(symbol, interval='15min'):
+    try:
+        # Run the asynchronous function in a synchronous context.
+        return asyncio.run(async_get_deriv_data(symbol, interval))
+    except Exception as e:
+        logger.error(f"Data Error ({symbol}): {str(e)}")
+        return None
+
 # ======== MARKET MONITORING SYSTEM ========
 def check_market_conditions():
     with trade_lock:
         try:
-            # Trade monitoring logic
+            # Monitor active trades using the latest 1-minute candle data from Deriv.
             for trade_id in list(active_trades.keys()):
                 trade = active_trades[trade_id]
-                df = get_twelve_data(trade['symbol'], '1min')
+                df = get_deriv_data(trade['symbol'], '1min')
                 if df is None or df.empty:
                     continue
 
@@ -133,7 +216,7 @@ def check_market_conditions():
                 tp1 = trade['tp1']
                 tp2 = trade['tp2']
 
-                # SL/TP checks for pure price action trades
+                # Check SL and TP conditions.
                 if (direction == 'BUY' and current_price <= sl) or (direction == 'SELL' and current_price >= sl):
                     logger.info(f"SL hit for trade {trade_id}")
                     handle_sl_hit(trade_id)
@@ -170,50 +253,16 @@ def notify_trend_change(symbol, new_trend, users):
         send_whatsapp_alert(user, message)
 
 def send_whatsapp_alert(user, message):
-    # Implement your Twilio alert logic here
+    # Implement your Twilio alert logic here.
     logger.info(f"Sending alert to {user}: {message}")
     pass
 
-# Schedule the market monitoring to run every minute
+# Schedule market monitoring every minute.
 scheduler.add_job(check_market_conditions, 'interval', minutes=1)
 
 # ======== CORE FUNCTIONS ========
 def convert_symbol(symbol):
     return SYMBOL_MAP.get(symbol.upper(), {"symbol": symbol, "category": None})
-
-def get_twelve_data(symbol, interval='15min'):
-    try:
-        config = convert_symbol(symbol)
-        params = {
-            "symbol": config["symbol"],
-            "interval": interval,
-            "outputsize": 200,
-            "apikey": TWELVE_API_KEY
-        }
-        if config["category"]:
-            params["category"] = config["category"]
-
-        response = requests.get("https://api.twelvedata.com/time_series", params=params, timeout=10)
-        data = response.json()
-
-        if data.get('status') != 'ok':
-            logger.error(f"Twelve Data API error for {symbol}: {data.get('message')}")
-            return None
-
-        df = pd.DataFrame(data['values'])
-        df = df.rename(columns={
-            'datetime': 'time',
-            'open': 'open',
-            'high': 'high',
-            'low': 'low',
-            'close': 'close'
-        }).sort_values('time', ascending=False)
-
-        return df.set_index('time').astype(float)
-
-    except Exception as e:
-        logger.error(f"Data Error ({symbol}): {str(e)}")
-        return None
 
 def calculate_winrate(data):
     if len(data) < 100:
@@ -224,9 +273,9 @@ def calculate_winrate(data):
 
 # ======== NEW STRATEGY: PURE PRICE ACTION ========
 def analyze_price_action(symbol):
-    df_15m = get_twelve_data(symbol, TIMEFRAMES['analysis'])
-    df_5m = get_twelve_data(symbol, TIMEFRAMES['sl'])
-    df_1m = get_twelve_data(symbol, TIMEFRAMES['entry'])
+    df_15m = get_deriv_data(symbol, TIMEFRAMES['analysis'])
+    df_5m = get_deriv_data(symbol, TIMEFRAMES['sl'])
+    df_1m = get_deriv_data(symbol, TIMEFRAMES['entry'])
 
     if df_15m is None or len(df_15m) < 2:
         return None
@@ -235,24 +284,24 @@ def analyze_price_action(symbol):
     if df_1m is None or df_1m.empty:
         return None
 
-    # Pure Price Action: Breakout of previous candle's range
+    # Pure Price Action: Breakout of previous candle's range.
     last_close = df_15m['close'].iloc[0]
     prev_high = df_15m['high'].iloc[1]
     prev_low = df_15m['low'].iloc[1]
 
     signal = None
     if last_close > prev_high:
-        # Bullish breakout
+        # Bullish breakout.
         entry = last_close
-        sl = prev_low  # using previous low as stop loss
+        sl = prev_low
         risk = entry - sl
         tp1 = entry + 2 * risk
         tp2 = entry + 4 * risk
         signal = ('BUY', entry, sl, tp1, tp2)
     elif last_close < prev_low:
-        # Bearish breakout
+        # Bearish breakout.
         entry = last_close
-        sl = prev_high  # using previous high as stop loss
+        sl = prev_high
         risk = sl - entry
         tp1 = entry - 2 * risk
         tp2 = entry - 4 * risk
@@ -261,7 +310,7 @@ def analyze_price_action(symbol):
     if not signal:
         return None
 
-    # Calculate position size based on risk management (kept internally, not sent to user)
+    # Calculate position size internally (not sent in the message)
     stop_loss_distance = abs(signal[1] - signal[2])
     position_size = calculate_position_size(DEFAULT_ACCOUNT_BALANCE, RISK_PERCENTAGE, stop_loss_distance)
 
@@ -269,17 +318,16 @@ def analyze_price_action(symbol):
         'symbol': symbol,
         'signal': signal[0],
         'winrate': calculate_winrate(df_15m),
-        'strategy': "Pure Price Action",
         'entry': signal[1],
         'sl': signal[2],
         'tp1': signal[3],
         'tp2': signal[4],
-        'position_size': position_size
+        'position_size': position_size  # stored internally but not sent in the response
     }
 
 # ======== BACKTESTING MODULE ========
 def backtest_price_action(symbol):
-    df = get_twelve_data(symbol, '15min')
+    df = get_deriv_data(symbol, '15min')
     if df is None or len(df) < 2:
         return None
     df_sorted = df.sort_index(ascending=True)
@@ -287,7 +335,7 @@ def backtest_price_action(symbol):
     for i in range(1, len(df_sorted)):
         prev = df_sorted.iloc[i - 1]
         current = df_sorted.iloc[i]
-        # Bullish breakout signal
+        # Bullish breakout signal.
         if current['close'] > prev['high']:
             entry = current['close']
             sl = prev['low']
@@ -295,7 +343,7 @@ def backtest_price_action(symbol):
             tp1 = entry + 2 * risk
             win = current['close'] >= tp1
             trades.append(win)
-        # Bearish breakout signal
+        # Bearish breakout signal.
         elif current['close'] < prev['low']:
             entry = current['close']
             sl = prev['high']
@@ -312,7 +360,22 @@ def backtest_price_action(symbol):
 # ======== WEB ENDPOINTS ========
 @app.route("/")
 def home():
-    return "ShadowFx Trading Bot - Operational"
+    # Updated greeting message to include all synthetics.
+    return (
+        "ShadowFx Trading Bot - Operational\n"
+        "Supported Instruments:\n"
+        "• Forex: EURUSD, GBPUSD, USDJPY, AUDUSD, USDCAD, USDCHF, NZDUSD, EURGBP, USDSEK, USDNOK, USDTRY, EURJPY, GBPJPY\n"
+        "• Commodities: XAUUSD, XAGUSD, XPTUSD, XPDUSD, CL1, NG1, CO1, HG1\n"
+        "• Indices: SPX, NDX, DJI, FTSE, DAX, NIKKEI, HSI, ASX, CAC\n"
+        "• Crypto: BTCUSD, ETHUSD, XRPUSD, LTCUSD, BCHUSD, ADAUSD, DOTUSD, SOLUSD\n"
+        "• ETFs: SPY, QQQ, GLD, XLF, IWM, EEM\n"
+        "• Stocks: AAPL, TSLA, AMZN, GOOGL, MSFT, META, NVDA, NFLX\n"
+        "• Synthetics: BOOM1000, BOOM300, BOOM500, BOOM600, BOOM900, CRASH1000, CRASH300, CRASH500, CRASH600, CRASH900, VOLATILITY100, VOLATILITY75, VOLATILITY50, VOLATILITY10, VOLATILITY25, VOLATILITY75S, VOLATILITY50S, VOLATILITY150S, VOLATILITY250S, JUMPS\n\n"
+        "Commands:\n"
+        "➤ Analysis: XAUUSD\n"
+        "➤ Price: PRICE BTCUSD\n"
+        "➤ Alert: ALERT SPX"
+    )
 
 @app.route("/webhook", methods=["POST"])
 def webhook():
@@ -323,14 +386,15 @@ def webhook():
 
         if incoming_msg in ["HI", "HELLO", "START"]:
             response.message(
-                "📈 Space_Zero 2.0 Trading Bot 📈\n"
+                "📈 ShadowFx Trading Bot 📈\n"
                 "Supported Instruments:\n"
                 "• Forex: EURUSD, GBPUSD, USDJPY, AUDUSD, USDCAD, USDCHF, NZDUSD, EURGBP, USDSEK, USDNOK, USDTRY, EURJPY, GBPJPY\n"
                 "• Commodities: XAUUSD, XAGUSD, XPTUSD, XPDUSD, CL1, NG1, CO1, HG1\n"
                 "• Indices: SPX, NDX, DJI, FTSE, DAX, NIKKEI, HSI, ASX, CAC\n"
                 "• Crypto: BTCUSD, ETHUSD, XRPUSD, LTCUSD, BCHUSD, ADAUSD, DOTUSD, SOLUSD\n"
                 "• ETFs: SPY, QQQ, GLD, XLF, IWM, EEM\n"
-                "• Stocks: AAPL, TSLA, AMZN, GOOGL, MSFT, META, NVDA, NFLX\n\n"
+                "• Stocks: AAPL, TSLA, AMZN, GOOGL, MSFT, META, NVDA, NFLX\n"
+                "• Synthetics: BOOM1000, BOOM300, BOOM500, BOOM600, BOOM900, CRASH1000, CRASH300, CRASH500, CRASH600, CRASH900, VOLATILITY100, VOLATILITY75, VOLATILITY50, VOLATILITY10, VOLATILITY25, VOLATILITY75S, VOLATILITY50S, VOLATILITY150S, VOLATILITY250S, JUMPS\n\n"
                 "Commands:\n"
                 "➤ Analysis: XAUUSD\n"
                 "➤ Price: PRICE BTCUSD\n"
@@ -340,7 +404,7 @@ def webhook():
 
         if incoming_msg.startswith("PRICE "):
             symbol = incoming_msg.split(" ")[1]
-            df = get_twelve_data(symbol, interval='1min')
+            df = get_deriv_data(symbol, interval='1min')
             if df is not None and not df.empty:
                 price = df['close'].iloc[0]
                 response.message(f"Current {symbol}: {price:.5f}")
@@ -367,6 +431,7 @@ def webhook():
                         'user': user_number
                     }
 
+                # Removed Strategy and Position Size details from the message.
                 msg = (f"📊 {analysis['symbol']} Analysis\n"
                        f"Signal: {analysis['signal']}\n"
                        f"Winrate: {analysis['winrate']}\n"
