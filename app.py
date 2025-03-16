@@ -15,7 +15,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 # Load environment variables
 load_dotenv()
 
-# Setup logging for improved system robustness
+# Setup logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -33,7 +33,6 @@ scheduler = BackgroundScheduler()
 # ======== DERIV DATA CONFIGURATION ========
 DERIV_WS_URI = "wss://ws.derivws.com/websockets/v3?app_id=1089"  # Replace with your app_id if needed
 
-# Mapping from our timeframe strings to granularity (in seconds)
 GRANULARITY_MAP = {
     '15min': 900,
     '5min': 300,
@@ -76,7 +75,7 @@ SYMBOL_MAP = {
     "ASX":    {"symbol": "AUS200", "category": "index"},         # Australia 200
     "CAC":    {"symbol": "FRA40", "category": "index"},          # France 40
 
-    # Cryptocurrencies (direct mapping)
+    # Cryptocurrencies
     "BTCUSD": {"symbol": "BTCUSD", "category": "crypto"},
     "ETHUSD": {"symbol": "ETHUSD", "category": "crypto"},
     "XRPUSD": {"symbol": "XRPUSD", "category": "crypto"},
@@ -86,7 +85,7 @@ SYMBOL_MAP = {
     "DOTUSD": {"symbol": "DOTUSD", "category": "crypto"},
     "SOLUSD": {"symbol": "SOLUSD", "category": "crypto"},
 
-    # ETFs (Deriv format)
+    # ETFs
     "SPY": {"symbol": "ETF_SPY", "category": "etf"},
     "QQQ": {"symbol": "ETF_QQQ", "category": "etf"},
     "GLD": {"symbol": "ETF_GLD", "category": "etf"},
@@ -94,7 +93,7 @@ SYMBOL_MAP = {
     "IWM": {"symbol": "ETF_IWM", "category": "etf"},
     "EEM": {"symbol": "ETF_EEM", "category": "etf"},
 
-    # Stocks (Deriv format with market suffix)
+    # Stocks
     "AAPL":  {"symbol": "stocksAAPL.us", "category": "stock"},
     "TSLA":  {"symbol": "stocksTSLA.us", "category": "stock"},
     "AMZN":  {"symbol": "stocksAMZN.us", "category": "stock"},
@@ -135,11 +134,11 @@ SYMBOL_MAP = {
     "VOLATILITY250S": {"symbol": "1HZ250SV", "category": "synthetic"},
 
     # Synthetics - Jump Indices
-    "JUMPS10":  {"symbol": "JD10",  "category": "synthetic"},
-    "JUMPS25":  {"symbol": "JD25",  "category": "synthetic"},
-    "JUMPS50":  {"symbol": "JD50",  "category": "synthetic"},
-    "JUMPS75":  {"symbol": "JD75",  "category": "synthetic"},
-    "JUMPS100": {"symbol": "JD100", "category": "synthetic"}
+    "JUMP10":   {"symbol": "JD10",  "category": "synthetic"},
+    "JUMP25":   {"symbol": "JD25",  "category": "synthetic"},
+    "JUMP50":   {"symbol": "JD50",  "category": "synthetic"},
+    "JUMP75":   {"symbol": "JD75",  "category": "synthetic"},
+    "JUMP100":  {"symbol": "JD100", "category": "synthetic"}
 }
 
 TIMEFRAMES = {
@@ -307,10 +306,10 @@ def analyze_price_action(symbol):
         return None
     if df_1m is None or df_1m.empty:
         return None
-    # Get previous candle's high and low from 15min data
+    # Use previous 15min candle's high and low as reference
     prev_high = df_15m['high'].iloc[1]
     prev_low = df_15m['low'].iloc[1]
-    # Get the current price from the 1min data as entry
+    # Use current 1min candle's close as entry price
     current_price = df_1m['close'].iloc[0]
     signal = None
     if current_price > prev_high:
@@ -339,7 +338,7 @@ def analyze_price_action(symbol):
         'sl': signal[2],
         'tp1': signal[3],
         'tp2': signal[4],
-        'position_size': position_size  # stored internally but not sent in the response
+        'position_size': position_size
     }
 
 # ======== BACKTESTING MODULE ========
@@ -389,7 +388,7 @@ def home():
         "   - Crash: CRASH1000, CRASH300, CRASH500, CRASH600, CRASH900\n"
         "   - Volatility (Standard): VOLATILITY10, VOLATILITY25, VOLATILITY50, VOLATILITY75, VOLATILITY100, VOLATILITY150\n"
         "   - Short-Term Volatility: VOLATILITY10S, VOLATILITY25S, VOLATILITY50S, VOLATILITY75S, VOLATILITY150S, VOLATILITY250S\n"
-        "   - Jump Indices: JUMPS10, JUMPS25, JUMPS50, JUMPS75, JUMPS100\n\n"
+        "   - Jump Indices: JUMP10, JUMP25, JUMP50, JUMP75, JUMP100\n\n"
         "Commands:\n"
         "➤ Analysis: EURUSD\n"
         "➤ Price: PRICE BTCUSD\n"
@@ -404,7 +403,7 @@ def webhook():
         user_number = request.form.get("From")
         if incoming_msg in ["HI", "HELLO", "START"]:
             response.message(
-                "📈 ShadowFx Trading Bot 📈\n"
+                "📈 Space_Zero 2.0 Trading Bot 📈\n"
                 "Supported Instruments:\n"
                 "• Forex: EURUSD, GBPUSD, USDJPY, AUDUSD, USDCAD, USDCHF, NZDUSD, EURGBP, USDSEK, USDNOK, USDTRY, EURJPY, GBPJPY\n"
                 "• Commodities: XAUUSD, XAGUSD, CL1, NG1, CO1, HG1\n"
@@ -417,7 +416,7 @@ def webhook():
                 "   - Crash: CRASH1000, CRASH300, CRASH500, CRASH600, CRASH900\n"
                 "   - Volatility (Standard): VOLATILITY10, VOLATILITY25, VOLATILITY50, VOLATILITY75, VOLATILITY100, VOLATILITY150\n"
                 "   - Short-Term Volatility: VOLATILITY10S, VOLATILITY25S, VOLATILITY50S, VOLATILITY75S, VOLATILITY150S, VOLATILITY250S\n"
-                "   - Jump Indices: JUMPS10, JUMPS25, JUMPS50, JUMPS75, JUMPS100\n\n"
+                "   - Jump Indices: JUMP10, JUMP25, JUMP50, JUMP75, JUMP100\n\n"
                 "Commands:\n"
                 "➤ Analysis: EURUSD\n"
                 "➤ Price: PRICE BTCUSD\n"
