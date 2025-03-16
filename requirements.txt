@@ -7,3 +7,4 @@ pandas-ta
 python-dotenv
 APScheduler
 gunicorn
+numpy<2.0
