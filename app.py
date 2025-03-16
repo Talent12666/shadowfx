@@ -15,7 +15,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 # Load environment variables
 load_dotenv()
 
-# Setup logging for improved system robustness
+# Setup logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -33,7 +33,6 @@ scheduler = BackgroundScheduler()
 # ======== DERIV DATA CONFIGURATION ========
 DERIV_WS_URI = "wss://ws.derivws.com/websockets/v3?app_id=1089"  # Replace with your app_id if needed
 
-# Mapping from our timeframe strings to granularity (in seconds)
 GRANULARITY_MAP = {
     '15min': 900,
     '5min': 300,
@@ -42,7 +41,7 @@ GRANULARITY_MAP = {
 
 # ======== SYMBOL MAPPING ========
 SYMBOL_MAP = {
-    # Forex (correct as frx pairs)
+    # Forex (frx pairs)
     "EURUSD": {"symbol": "frxEURUSD", "category": "forex"},
     "GBPUSD": {"symbol": "frxGBPUSD", "category": "forex"},
     "USDJPY": {"symbol": "frxUSDJPY", "category": "forex"},
@@ -57,7 +56,7 @@ SYMBOL_MAP = {
     "EURJPY": {"symbol": "frxEURJPY", "category": "forex"},
     "GBPJPY": {"symbol": "frxGBPJPY", "category": "forex"},
 
-    # Commodities (updated to Deriv symbols)
+    # Commodities
     "XAUUSD": {"symbol": "WLDAUD", "category": "commodity"},  # Gold/AUD
     "XAGUSD": {"symbol": "SILVER", "category": "commodity"},   # Silver
     "CL1":    {"symbol": "CL_BRENT", "category": "commodity"},  # Brent Crude Oil
@@ -65,7 +64,7 @@ SYMBOL_MAP = {
     "CO1":    {"symbol": "COAL", "category": "commodity"},      # Coal
     "HG1":    {"symbol": "XCUUSD", "category": "commodity"},    # Copper
 
-    # Indices (correct index symbols)
+    # Indices
     "SPX":    {"symbol": "SPX500", "category": "index"},        # S&P 500
     "NDX":    {"symbol": "NAS100", "category": "index"},        # NASDAQ 100
     "DJI":    {"symbol": "DJ30", "category": "index"},          # Dow Jones 30
@@ -104,36 +103,42 @@ SYMBOL_MAP = {
     "NVDA":  {"symbol": "stocksNVDA.us", "category": "stock"},
     "NFLX":  {"symbol": "stocksNFLX.us", "category": "stock"},
 
-    # Synthetics - Boom/Crash (correct symbols)
+    # Synthetics - Boom indices
     "BOOM1000": {"symbol": "BOOM1000", "category": "synthetic"},
     "BOOM300":  {"symbol": "BOOM300",  "category": "synthetic"},
     "BOOM500":  {"symbol": "BOOM500",  "category": "synthetic"},
     "BOOM600":  {"symbol": "BOOM600",  "category": "synthetic"},
     "BOOM900":  {"symbol": "BOOM900",  "category": "synthetic"},
 
+    # Synthetics - Crash indices
     "CRASH1000": {"symbol": "CRASH1000", "category": "synthetic"},
     "CRASH300":  {"symbol": "CRASH300", "category": "synthetic"},
     "CRASH500":  {"symbol": "CRASH500", "category": "synthetic"},
     "CRASH600":  {"symbol": "CRASH600", "category": "synthetic"},
     "CRASH900":  {"symbol": "CRASH900", "category": "synthetic"},
 
-    # Synthetics - Volatility (using actual codes)
-    "VOLATILITY100":  {"symbol": "1HZ100V",  "category": "synthetic"},
-    "VOLATILITY75":   {"symbol": "1HZ75V",   "category": "synthetic"},  # updated mapping
-    "VOLATILITY50":   {"symbol": "1HZ50V",   "category": "synthetic"},
-    "VOLATILITY10":   {"symbol": "1HZ10V",   "category": "synthetic"},
-    "VOLATILITY25":   {"symbol": "1HZ25V",   "category": "synthetic"},
-    "VOLATILITY75S":  {"symbol": "1HZ75SV",  "category": "synthetic"},
+    # Synthetics - Volatility (Standard)
+    "VOLATILITY10":  {"symbol": "1HZ10V",  "category": "synthetic"},
+    "VOLATILITY25":  {"symbol": "1HZ25V",  "category": "synthetic"},
+    "VOLATILITY50":  {"symbol": "1HZ50V",  "category": "synthetic"},
+    "VOLATILITY75":  {"symbol": "1HZ75V",  "category": "synthetic"},
+    "VOLATILITY100": {"symbol": "1HZ100V", "category": "synthetic"},
+    "VOLATILITY150": {"symbol": "1HZ150V", "category": "synthetic"},
+
+    # Synthetics - Short-Term Volatility
+    "VOLATILITY10S":  {"symbol": "1HZ10SV",  "category": "synthetic"},
+    "VOLATILITY25S":  {"symbol": "1HZ25SV",  "category": "synthetic"},
     "VOLATILITY50S":  {"symbol": "1HZ50SV",  "category": "synthetic"},
+    "VOLATILITY75S":  {"symbol": "1HZ75SV",  "category": "synthetic"},
     "VOLATILITY150S": {"symbol": "1HZ150SV", "category": "synthetic"},
     "VOLATILITY250S": {"symbol": "1HZ250SV", "category": "synthetic"},
 
-    # Synthetics - Jumps (new instruments added)
-    "JUMPS": {"symbol": "JUMPS", "category": "synthetic"},
-    "JUMP100": {"symbol": "JUMP100", "category": "synthetic"},
-    "JUMP10": {"symbol": "JUMP10", "category": "synthetic"},
-    "JUMP75": {"symbol": "JUMP75", "category": "synthetic"},
-    "JUMP25": {"symbol": "JUMP25", "category": "synthetic"}
+    # Synthetics - Jump Indices
+    "JUMPS10":  {"symbol": "JD10",  "category": "synthetic"},
+    "JUMPS25":  {"symbol": "JD25",  "category": "synthetic"},
+    "JUMPS50":  {"symbol": "JD50",  "category": "synthetic"},
+    "JUMPS75":  {"symbol": "JD75",  "category": "synthetic"},
+    "JUMPS100": {"symbol": "JD100", "category": "synthetic"}
 }
 
 TIMEFRAMES = {
@@ -210,7 +215,7 @@ def get_active_symbols():
 def get_deriv_data(symbol, interval='15min'):
     try:
         config = convert_symbol(symbol)
-        # For crypto and synthetic instruments, skip active-symbol check.
+        # For crypto and synthetic assets, skip active-symbol check.
         if config["category"] not in ["crypto", "synthetic"]:
             active = get_active_symbols()
             active_symbols = [item["symbol"] for item in active]
@@ -373,16 +378,21 @@ def home():
         "ShadowFx Trading Bot - Operational\n"
         "Supported Instruments:\n"
         "• Forex: EURUSD, GBPUSD, USDJPY, AUDUSD, USDCAD, USDCHF, NZDUSD, EURGBP, USDSEK, USDNOK, USDTRY, EURJPY, GBPJPY\n"
-        "• Commodities: XAUUSD, XAGUSD, XPTUSD, XPDUSD, CL1, NG1, CO1, HG1\n"
+        "• Commodities: XAUUSD, XAGUSD, CL1, NG1, CO1, HG1\n"
         "• Indices: SPX, NDX, DJI, FTSE, DAX, NIKKEI, HSI, ASX, CAC\n"
         "• Crypto: BTCUSD, ETHUSD, XRPUSD, LTCUSD, BCHUSD, ADAUSD, DOTUSD, SOLUSD\n"
         "• ETFs: SPY, QQQ, GLD, XLF, IWM, EEM\n"
         "• Stocks: AAPL, TSLA, AMZN, GOOGL, MSFT, META, NVDA, NFLX\n"
-        "• Synthetics: BOOM1000, BOOM300, BOOM500, BOOM600, BOOM900, CRASH1000, CRASH300, CRASH500, CRASH600, CRASH900, VOLATILITY100, VOLATILITY75, VOLATILITY50, VOLATILITY10, VOLATILITY25, VOLATILITY75S, VOLATILITY50S, VOLATILITY150S, VOLATILITY250S, JUMPS, JUMP100, JUMP10, JUMP75, JUMP25\n\n"
+        "• Synthetics:\n"
+        "   - Boom: BOOM1000, BOOM300, BOOM500, BOOM600, BOOM900\n"
+        "   - Crash: CRASH1000, CRASH300, CRASH500, CRASH600, CRASH900\n"
+        "   - Volatility (Standard): VOLATILITY10, VOLATILITY25, VOLATILITY50, VOLATILITY75, VOLATILITY100, VOLATILITY150\n"
+        "   - Short-Term Volatility: VOLATILITY10S, VOLATILITY25S, VOLATILITY50S, VOLATILITY75S, VOLATILITY150S, VOLATILITY250S\n"
+        "   - Jump Indices: JUMPS10, JUMPS25, JUMPS50, JUMPS75, JUMPS100\n\n"
         "Commands:\n"
-        "➤ Analysis: XAUUSD\n"
+        "➤ Analysis: BTCUSD\n"
         "➤ Price: PRICE BTCUSD\n"
-        "➤ Alert: ALERT SPX"
+        "➤ Alert: ALERT BTCUSD"
     )
 
 @app.route("/webhook", methods=["POST"])
@@ -395,17 +405,14 @@ def webhook():
             response.message(
                 "📈 ShadowFx Trading Bot 📈\n"
                 "Supported Instruments:\n"
-                "• Forex: EURUSD, GBPUSD, USDJPY, AUDUSD, USDCAD, USDCHF, NZDUSD, EURGBP, USDSEK, USDNOK, USDTRY, EURJPY, GBPJPY\n"
-                "• Commodities: XAUUSD, XAGUSD, XPTUSD, XPDUSD, CL1, NG1, CO1, HG1\n"
-                "• Indices: SPX, NDX, DJI, FTSE, DAX, NIKKEI, HSI, ASX, CAC\n"
                 "• Crypto: BTCUSD, ETHUSD, XRPUSD, LTCUSD, BCHUSD, ADAUSD, DOTUSD, SOLUSD\n"
-                "• ETFs: SPY, QQQ, GLD, XLF, IWM, EEM\n"
-                "• Stocks: AAPL, TSLA, AMZN, GOOGL, MSFT, META, NVDA, NFLX\n"
-                "• Synthetics: BOOM1000, BOOM300, BOOM500, BOOM600, BOOM900, CRASH1000, CRASH300, CRASH500, CRASH600, CRASH900, VOLATILITY100, VOLATILITY75, VOLATILITY50, VOLATILITY10, VOLATILITY25, VOLATILITY75S, VOLATILITY50S, VOLATILITY150S, VOLATILITY250S, JUMPS, JUMP100, JUMP10, JUMP75, JUMP25\n\n"
+                "• Jump Indices: JUMPS10, JUMPS25, JUMPS50, JUMPS75, JUMPS100\n"
+                "• Volatility Indices (Standard): VOLATILITY10, VOLATILITY25, VOLATILITY50, VOLATILITY75, VOLATILITY100, VOLATILITY150\n"
+                "• Short-Term Volatility: VOLATILITY10S, VOLATILITY25S, VOLATILITY50S, VOLATILITY75S, VOLATILITY150S, VOLATILITY250S\n\n"
                 "Commands:\n"
-                "➤ Analysis: XAUUSD\n"
+                "➤ Analysis: BTCUSD\n"
                 "➤ Price: PRICE BTCUSD\n"
-                "➤ Alert: ALERT SPX"
+                "➤ Alert: ALERT BTCUSD"
             )
             return str(response)
         if incoming_msg.startswith("PRICE "):
