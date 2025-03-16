@@ -41,9 +41,8 @@ GRANULARITY_MAP = {
 }
 
 # ======== SYMBOL MAPPING ========
-# Updated mapping:
 SYMBOL_MAP = {
-    # Forex
+    # Forex (correct as frx pairs)
     "EURUSD": {"symbol": "frxEURUSD", "category": "forex"},
     "GBPUSD": {"symbol": "frxGBPUSD", "category": "forex"},
     "USDJPY": {"symbol": "frxUSDJPY", "category": "forex"},
@@ -58,28 +57,26 @@ SYMBOL_MAP = {
     "EURJPY": {"symbol": "frxEURJPY", "category": "forex"},
     "GBPJPY": {"symbol": "frxGBPJPY", "category": "forex"},
 
-    # Commodities
-    "XAUUSD": {"symbol": "gold", "category": "commodity"},
-    "XAGUSD": {"symbol": "silver", "category": "commodity"},
-    "XPTUSD": {"symbol": "platinum", "category": "commodity"},
-    "XPDUSD": {"symbol": "palladium", "category": "commodity"},
-    "CL1":    {"symbol": "crude_oil", "category": "commodity"},
-    "NG1":    {"symbol": "natural_gas", "category": "commodity"},
-    "CO1":    {"symbol": "coal", "category": "commodity"},
-    "HG1":    {"symbol": "copper", "category": "commodity"},
+    # Commodities (updated to Deriv symbols)
+    "XAUUSD": {"symbol": "WLDAUD", "category": "commodity"},  # Gold/AUD
+    "XAGUSD": {"symbol": "SILVER", "category": "commodity"},   # Silver
+    "CL1":    {"symbol": "CL_BRENT", "category": "commodity"},  # Brent Crude Oil
+    "NG1":    {"symbol": "NG_HEN", "category": "commodity"},    # Natural Gas
+    "CO1":    {"symbol": "COAL", "category": "commodity"},      # Coal
+    "HG1":    {"symbol": "XCUUSD", "category": "commodity"},    # Copper
 
-    # Indices
-    "SPX":    {"symbol": "indices_us", "category": "index"},
-    "NDX":    {"symbol": "indices_nasdaq", "category": "index"},
-    "DJI":    {"symbol": "indices_dow_jones", "category": "index"},
-    "FTSE":   {"symbol": "indices_ftse", "category": "index"},
-    "DAX":    {"symbol": "indices_dax", "category": "index"},
-    "NIKKEI": {"symbol": "indices_nikkei", "category": "index"},
-    "HSI":    {"symbol": "indices_hsi", "category": "index"},
-    "ASX":    {"symbol": "indices_asx", "category": "index"},
-    "CAC":    {"symbol": "indices_cac", "category": "index"},
+    # Indices (correct index symbols)
+    "SPX":    {"symbol": "SPX500", "category": "index"},        # S&P 500
+    "NDX":    {"symbol": "NAS100", "category": "index"},        # NASDAQ 100
+    "DJI":    {"symbol": "DJ30", "category": "index"},          # Dow Jones 30
+    "FTSE":   {"symbol": "FTSE100", "category": "index"},       # FTSE 100
+    "DAX":    {"symbol": "DAX40", "category": "index"},         # DAX 40
+    "NIKKEI": {"symbol": "JP225", "category": "index"},          # Nikkei 225
+    "HSI":    {"symbol": "HK50", "category": "index"},           # Hang Seng 50
+    "ASX":    {"symbol": "AUS200", "category": "index"},         # Australia 200
+    "CAC":    {"symbol": "FRA40", "category": "index"},          # France 40
 
-    # Cryptocurrencies (no prefix)
+    # Cryptocurrencies (direct mapping)
     "BTCUSD": {"symbol": "BTCUSD", "category": "crypto"},
     "ETHUSD": {"symbol": "ETHUSD", "category": "crypto"},
     "XRPUSD": {"symbol": "XRPUSD", "category": "crypto"},
@@ -89,48 +86,47 @@ SYMBOL_MAP = {
     "DOTUSD": {"symbol": "DOTUSD", "category": "crypto"},
     "SOLUSD": {"symbol": "SOLUSD", "category": "crypto"},
 
-    # ETFs
-    "SPY": {"symbol": "etfSPY", "category": "etf"},
-    "QQQ": {"symbol": "etfQQQ", "category": "etf"},
-    "GLD": {"symbol": "etfGLD", "category": "etf"},
-    "XLF": {"symbol": "etfXLF", "category": "etf"},
-    "IWM": {"symbol": "etfIWM", "category": "etf"},
-    "EEM": {"symbol": "etfEEM", "category": "etf"},
+    # ETFs (Deriv format)
+    "SPY": {"symbol": "ETF_SPY", "category": "etf"},
+    "QQQ": {"symbol": "ETF_QQQ", "category": "etf"},
+    "GLD": {"symbol": "ETF_GLD", "category": "etf"},
+    "XLF": {"symbol": "ETF_XLF", "category": "etf"},
+    "IWM": {"symbol": "ETF_IWM", "category": "etf"},
+    "EEM": {"symbol": "ETF_EEM", "category": "etf"},
 
-    # Stocks
-    "AAPL":  {"symbol": "stockAAPL", "category": "stock"},
-    "TSLA":  {"symbol": "stockTSLA", "category": "stock"},
-    "AMZN":  {"symbol": "stockAMZN", "category": "stock"},
-    "GOOGL": {"symbol": "stockGOOGL", "category": "stock"},
-    "MSFT":  {"symbol": "stockMSFT", "category": "stock"},
-    "META":  {"symbol": "stockMETA", "category": "stock"},
-    "NVDA":  {"symbol": "stockNVDA", "category": "stock"},
-    "NFLX":  {"symbol": "stockNFLX", "category": "stock"},
+    # Stocks (Deriv format with market suffix)
+    "AAPL":  {"symbol": "stocksAAPL.us", "category": "stock"},
+    "TSLA":  {"symbol": "stocksTSLA.us", "category": "stock"},
+    "AMZN":  {"symbol": "stocksAMZN.us", "category": "stock"},
+    "GOOGL": {"symbol": "stocksGOOGL.us", "category": "stock"},
+    "MSFT":  {"symbol": "stocksMSFT.us", "category": "stock"},
+    "META":  {"symbol": "stocksMETA.us", "category": "stock"},
+    "NVDA":  {"symbol": "stocksNVDA.us", "category": "stock"},
+    "NFLX":  {"symbol": "stocksNFLX.us", "category": "stock"},
 
-    # Synthetics - Boom (use uppercase)
+    # Synthetics - Boom/Crash (correct symbols)
     "BOOM1000": {"symbol": "BOOM1000", "category": "synthetic"},
     "BOOM300":  {"symbol": "BOOM300",  "category": "synthetic"},
     "BOOM500":  {"symbol": "BOOM500",  "category": "synthetic"},
     "BOOM600":  {"symbol": "BOOM600",  "category": "synthetic"},
     "BOOM900":  {"symbol": "BOOM900",  "category": "synthetic"},
 
-    # Synthetics - Crash
     "CRASH1000": {"symbol": "CRASH1000", "category": "synthetic"},
     "CRASH300":  {"symbol": "CRASH300",  "category": "synthetic"},
     "CRASH500":  {"symbol": "CRASH500",  "category": "synthetic"},
     "CRASH600":  {"symbol": "CRASH600",  "category": "synthetic"},
     "CRASH900":  {"symbol": "CRASH900",  "category": "synthetic"},
 
-    # Synthetics - Volatility
-    "VOLATILITY100":  {"symbol": "VOLATILITY100",  "category": "synthetic"},
-    "VOLATILITY75":   {"symbol": "VOLATILITY75",   "category": "synthetic"},
-    "VOLATILITY50":   {"symbol": "VOLATILITY50",   "category": "synthetic"},
-    "VOLATILITY10":   {"symbol": "VOLATILITY10",   "category": "synthetic"},
-    "VOLATILITY25":   {"symbol": "VOLATILITY25",   "category": "synthetic"},
-    "VOLATILITY75S":  {"symbol": "VOLATILITY75S",  "category": "synthetic"},
-    "VOLATILITY50S":  {"symbol": "VOLATILITY50S",  "category": "synthetic"},
-    "VOLATILITY150S": {"symbol": "VOLATILITY150S", "category": "synthetic"},
-    "VOLATILITY250S": {"symbol": "VOLATILITY250S", "category": "synthetic"},
+    # Synthetics - Volatility (using actual codes)
+    "VOLATILITY100":  {"symbol": "1HZ100V",  "category": "synthetic"},
+    "VOLATILITY75":   {"symbol": "1HZ75V",   "category": "synthetic"},
+    "VOLATILITY50":   {"symbol": "1HZ50V",   "category": "synthetic"},
+    "VOLATILITY10":   {"symbol": "1HZ10V",   "category": "synthetic"},
+    "VOLATILITY25":   {"symbol": "1HZ25V",   "category": "synthetic"},
+    "VOLATILITY75S":  {"symbol": "1HZ75SV",  "category": "synthetic"},
+    "VOLATILITY50S":  {"symbol": "1HZ50SV",  "category": "synthetic"},
+    "VOLATILITY150S": {"symbol": "1HZ150SV", "category": "synthetic"},
+    "VOLATILITY250S": {"symbol": "1HZ250SV", "category": "synthetic"},
 
     # Synthetics - Jumps
     "JUMPS": {"symbol": "JUMPS", "category": "synthetic"}
