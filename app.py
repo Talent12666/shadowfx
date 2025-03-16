@@ -180,9 +180,37 @@ async def async_get_deriv_data(symbol, interval='15min'):
         logger.error(f"Error connecting to Deriv WebSocket for {symbol}: {str(e)}")
         return None
 
+async def async_get_active_symbols():
+    request_payload = {"active_symbols": "full", "product_type": "basic"}
+    try:
+        async with websockets.connect(DERIV_WS_URI) as websocket:
+            await websocket.send(json.dumps(request_payload))
+            response = await websocket.recv()
+            data = json.loads(response)
+            if "active_symbols" in data:
+                return data["active_symbols"]
+            else:
+                logger.error(f"Error getting active symbols: {data.get('error', 'Unknown error')}")
+                return []
+    except Exception as e:
+        logger.error(f"Error connecting to get active symbols: {str(e)}")
+        return []
+
+def get_active_symbols():
+    try:
+        return asyncio.run(async_get_active_symbols())
+    except Exception as e:
+        logger.error(f"Error in get_active_symbols: {str(e)}")
+        return []
+
 def get_deriv_data(symbol, interval='15min'):
     try:
         config = convert_symbol(symbol)
+        active = get_active_symbols()
+        active_symbols = [item["symbol"] for item in active]
+        if config["symbol"] not in active_symbols:
+            logger.error(f"Symbol {config['symbol']} not active.")
+            return None
         return asyncio.run(async_get_deriv_data(config["symbol"], interval))
     except Exception as e:
         logger.error(f"Data Error ({symbol}): {str(e)}")
@@ -267,19 +295,21 @@ def analyze_price_action(symbol):
         return None
     if df_1m is None or df_1m.empty:
         return None
-    last_close = df_15m['close'].iloc[0]
+    # Use the previous candle's high/low from 15min as reference
     prev_high = df_15m['high'].iloc[1]
     prev_low = df_15m['low'].iloc[1]
+    # Use the current price from the 1min candle as the entry price
+    current_price = df_1m['close'].iloc[0]
     signal = None
-    if last_close > prev_high:
-        entry = last_close
+    if current_price > prev_high:
+        entry = current_price
         sl = prev_low
         risk = entry - sl
         tp1 = entry + 2 * risk
         tp2 = entry + 4 * risk
         signal = ('BUY', entry, sl, tp1, tp2)
-    elif last_close < prev_low:
-        entry = last_close
+    elif current_price < prev_low:
+        entry = current_price
         sl = prev_high
         risk = sl - entry
         tp1 = entry - 2 * risk
