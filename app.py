@@ -31,8 +31,7 @@ trade_lock = Lock()
 scheduler = BackgroundScheduler()
 
 # ======== DERIV DATA CONFIGURATION ========
-# We'll request historical candle data via Deriv's WebSocket API using the "ticks_history" call.
-DERIV_WS_URI = "wss://ws.derivws.com/websockets/v3?app_id=1089"
+DERIV_WS_URI = "wss://ws.derivws.com/websockets/v3?app_id=1089"  # Replace with your app_id if needed
 
 # Mapping from our timeframe strings to granularity (in seconds)
 GRANULARITY_MAP = {
@@ -42,7 +41,7 @@ GRANULARITY_MAP = {
 }
 
 # ======== SYMBOL MAPPING ========
-# All supported instruments are mapped to Deriv's symbol format.
+# Updated mapping:
 SYMBOL_MAP = {
     # Forex
     "EURUSD": {"symbol": "frxEURUSD", "category": "forex"},
@@ -80,15 +79,15 @@ SYMBOL_MAP = {
     "ASX":    {"symbol": "indices_asx", "category": "index"},
     "CAC":    {"symbol": "indices_cac", "category": "index"},
 
-    # Crypto
-    "BTCUSD": {"symbol": "cryptoBTCUSD", "category": "crypto"},
-    "ETHUSD": {"symbol": "cryptoETHUSD", "category": "crypto"},
-    "XRPUSD": {"symbol": "cryptoXRPUSD", "category": "crypto"},
-    "LTCUSD": {"symbol": "cryptoLTCUSD", "category": "crypto"},
-    "BCHUSD": {"symbol": "cryptoBCHUSD", "category": "crypto"},
-    "ADAUSD": {"symbol": "cryptoADAUSD", "category": "crypto"},
-    "DOTUSD": {"symbol": "cryptoDOTUSD", "category": "crypto"},
-    "SOLUSD": {"symbol": "cryptoSOLUSD", "category": "crypto"},
+    # Cryptocurrencies (no prefix)
+    "BTCUSD": {"symbol": "BTCUSD", "category": "crypto"},
+    "ETHUSD": {"symbol": "ETHUSD", "category": "crypto"},
+    "XRPUSD": {"symbol": "XRPUSD", "category": "crypto"},
+    "LTCUSD": {"symbol": "LTCUSD", "category": "crypto"},
+    "BCHUSD": {"symbol": "BCHUSD", "category": "crypto"},
+    "ADAUSD": {"symbol": "ADAUSD", "category": "crypto"},
+    "DOTUSD": {"symbol": "DOTUSD", "category": "crypto"},
+    "SOLUSD": {"symbol": "SOLUSD", "category": "crypto"},
 
     # ETFs
     "SPY": {"symbol": "etfSPY", "category": "etf"},
@@ -108,33 +107,33 @@ SYMBOL_MAP = {
     "NVDA":  {"symbol": "stockNVDA", "category": "stock"},
     "NFLX":  {"symbol": "stockNFLX", "category": "stock"},
 
-    # Synthetics - Boom
-    "BOOM1000": {"symbol": "boom1000", "category": "synthetic"},
-    "BOOM300":  {"symbol": "boom300",  "category": "synthetic"},
-    "BOOM500":  {"symbol": "boom500",  "category": "synthetic"},
-    "BOOM600":  {"symbol": "boom600",  "category": "synthetic"},
-    "BOOM900":  {"symbol": "boom900",  "category": "synthetic"},
+    # Synthetics - Boom (use uppercase)
+    "BOOM1000": {"symbol": "BOOM1000", "category": "synthetic"},
+    "BOOM300":  {"symbol": "BOOM300",  "category": "synthetic"},
+    "BOOM500":  {"symbol": "BOOM500",  "category": "synthetic"},
+    "BOOM600":  {"symbol": "BOOM600",  "category": "synthetic"},
+    "BOOM900":  {"symbol": "BOOM900",  "category": "synthetic"},
 
     # Synthetics - Crash
-    "CRASH1000": {"symbol": "crash1000", "category": "synthetic"},
-    "CRASH300":  {"symbol": "crash300",  "category": "synthetic"},
-    "CRASH500":  {"symbol": "crash500",  "category": "synthetic"},
-    "CRASH600":  {"symbol": "crash600",  "category": "synthetic"},
-    "CRASH900":  {"symbol": "crash900",  "category": "synthetic"},
+    "CRASH1000": {"symbol": "CRASH1000", "category": "synthetic"},
+    "CRASH300":  {"symbol": "CRASH300",  "category": "synthetic"},
+    "CRASH500":  {"symbol": "CRASH500",  "category": "synthetic"},
+    "CRASH600":  {"symbol": "CRASH600",  "category": "synthetic"},
+    "CRASH900":  {"symbol": "CRASH900",  "category": "synthetic"},
 
     # Synthetics - Volatility
-    "VOLATILITY100":  {"symbol": "volatility100",  "category": "synthetic"},
-    "VOLATILITY75":   {"symbol": "volatility75",   "category": "synthetic"},
-    "VOLATILITY50":   {"symbol": "volatility50",   "category": "synthetic"},
-    "VOLATILITY10":   {"symbol": "volatility10",   "category": "synthetic"},
-    "VOLATILITY25":   {"symbol": "volatility25",   "category": "synthetic"},
-    "VOLATILITY75S":  {"symbol": "volatility75s",  "category": "synthetic"},
-    "VOLATILITY50S":  {"symbol": "volatility50s",  "category": "synthetic"},
-    "VOLATILITY150S": {"symbol": "volatility150s", "category": "synthetic"},
-    "VOLATILITY250S": {"symbol": "volatility250s", "category": "synthetic"},
+    "VOLATILITY100":  {"symbol": "VOLATILITY100",  "category": "synthetic"},
+    "VOLATILITY75":   {"symbol": "VOLATILITY75",   "category": "synthetic"},
+    "VOLATILITY50":   {"symbol": "VOLATILITY50",   "category": "synthetic"},
+    "VOLATILITY10":   {"symbol": "VOLATILITY10",   "category": "synthetic"},
+    "VOLATILITY25":   {"symbol": "VOLATILITY25",   "category": "synthetic"},
+    "VOLATILITY75S":  {"symbol": "VOLATILITY75S",  "category": "synthetic"},
+    "VOLATILITY50S":  {"symbol": "VOLATILITY50S",  "category": "synthetic"},
+    "VOLATILITY150S": {"symbol": "VOLATILITY150S", "category": "synthetic"},
+    "VOLATILITY250S": {"symbol": "VOLATILITY250S", "category": "synthetic"},
 
     # Synthetics - Jumps
-    "JUMPS": {"symbol": "jumps", "category": "synthetic"}
+    "JUMPS": {"symbol": "JUMPS", "category": "synthetic"}
 }
 
 TIMEFRAMES = {
@@ -144,7 +143,6 @@ TIMEFRAMES = {
 }
 
 # ======== RISK MANAGEMENT CONFIG ========
-# (Position size is calculated internally and not sent in responses.)
 DEFAULT_ACCOUNT_BALANCE = float(os.getenv("ACCOUNT_BALANCE", 10000))
 RISK_PERCENTAGE = float(os.getenv("RISK_PERCENTAGE", 1))  # 1%
 
@@ -152,8 +150,7 @@ def calculate_position_size(account_balance, risk_percentage, stop_loss_distance
     risk_amount = account_balance * (risk_percentage / 100)
     if stop_loss_distance == 0:
         return 0
-    position_size = risk_amount / stop_loss_distance
-    return position_size
+    return risk_amount / stop_loss_distance
 
 # ======== DERIV WEBSOCKET DATA FUNCTIONALITY ========
 async def async_get_deriv_data(symbol, interval='15min'):
@@ -164,7 +161,7 @@ async def async_get_deriv_data(symbol, interval='15min'):
         "count": 200,
         "end": "latest",
         "granularity": granularity,
-        "style": "candles"  # Ensures candle data is returned.
+        "style": "candles"
     }
     try:
         async with websockets.connect(DERIV_WS_URI) as websocket:
@@ -246,8 +243,8 @@ def notify_trend_change(symbol, new_trend, users):
         send_whatsapp_alert(user, message)
 
 def send_whatsapp_alert(user, message):
-    # Implement your Twilio alert logic here.
     logger.info(f"Sending alert to {user}: {message}")
+    # Implement Twilio alert logic here
     pass
 
 scheduler.add_job(check_market_conditions, 'interval', minutes=1)
