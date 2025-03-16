@@ -117,9 +117,9 @@ SYMBOL_MAP = {
     "CRASH600":  {"symbol": "CRASH600",  "category": "synthetic"},
     "CRASH900":  {"symbol": "CRASH900",  "category": "synthetic"},
 
-    # Synthetics - Volatility (using actual codes)
+    # Synthetics - Volatility (using actual codes, with VOL75 updated)
     "VOLATILITY100":  {"symbol": "1HZ100V",  "category": "synthetic"},
-    "VOLATILITY75":   {"symbol": "1HZ75V",   "category": "synthetic"},
+    "VOLATILITY75":   {"symbol": "VOL75",    "category": "synthetic"},  # updated mapping
     "VOLATILITY50":   {"symbol": "1HZ50V",   "category": "synthetic"},
     "VOLATILITY10":   {"symbol": "1HZ10V",   "category": "synthetic"},
     "VOLATILITY25":   {"symbol": "1HZ25V",   "category": "synthetic"},
@@ -128,8 +128,12 @@ SYMBOL_MAP = {
     "VOLATILITY150S": {"symbol": "1HZ150SV", "category": "synthetic"},
     "VOLATILITY250S": {"symbol": "1HZ250SV", "category": "synthetic"},
 
-    # Synthetics - Jumps
-    "JUMPS": {"symbol": "JUMPS", "category": "synthetic"}
+    # Synthetics - Jumps (added new jump instruments)
+    "JUMPS": {"symbol": "JUMPS", "category": "synthetic"},
+    "JUMP100": {"symbol": "JUMP100", "category": "synthetic"},
+    "JUMP10": {"symbol": "JUMP10", "category": "synthetic"},
+    "JUMP75": {"symbol": "JUMP75", "category": "synthetic"},
+    "JUMP25": {"symbol": "JUMP25", "category": "synthetic"}
 }
 
 TIMEFRAMES = {
@@ -181,7 +185,7 @@ async def async_get_deriv_data(symbol, interval='15min'):
         return None
 
 async def async_get_active_symbols():
-    request_payload = {"active_symbols": "full", "product_type": "basic"}
+    request_payload = {"active_symbols": "full"}
     try:
         async with websockets.connect(DERIV_WS_URI) as websocket:
             await websocket.send(json.dumps(request_payload))
@@ -295,10 +299,10 @@ def analyze_price_action(symbol):
         return None
     if df_1m is None or df_1m.empty:
         return None
-    # Use the previous candle's high/low from 15min as reference
+    # Get previous candle's high and low from 15min data
     prev_high = df_15m['high'].iloc[1]
     prev_low = df_15m['low'].iloc[1]
-    # Use the current price from the 1min candle as the entry price
+    # Get the current price from the 1min data as entry
     current_price = df_1m['close'].iloc[0]
     signal = None
     if current_price > prev_high:
@@ -372,7 +376,7 @@ def home():
         "• Crypto: BTCUSD, ETHUSD, XRPUSD, LTCUSD, BCHUSD, ADAUSD, DOTUSD, SOLUSD\n"
         "• ETFs: SPY, QQQ, GLD, XLF, IWM, EEM\n"
         "• Stocks: AAPL, TSLA, AMZN, GOOGL, MSFT, META, NVDA, NFLX\n"
-        "• Synthetics: BOOM1000, BOOM300, BOOM500, BOOM600, BOOM900, CRASH1000, CRASH300, CRASH500, CRASH600, CRASH900, VOLATILITY100, VOLATILITY75, VOLATILITY50, VOLATILITY10, VOLATILITY25, VOLATILITY75S, VOLATILITY50S, VOLATILITY150S, VOLATILITY250S, JUMPS\n\n"
+        "• Synthetics: BOOM1000, BOOM300, BOOM500, BOOM600, BOOM900, CRASH1000, CRASH300, CRASH500, CRASH600, CRASH900, VOLATILITY100, VOLATILITY75, VOLATILITY50, VOLATILITY10, VOLATILITY25, VOLATILITY75S, VOLATILITY50S, VOLATILITY150S, VOLATILITY250S, JUMPS, JUMP100, JUMP10, JUMP75, JUMP25\n\n"
         "Commands:\n"
         "➤ Analysis: XAUUSD\n"
         "➤ Price: PRICE BTCUSD\n"
@@ -395,7 +399,7 @@ def webhook():
                 "• Crypto: BTCUSD, ETHUSD, XRPUSD, LTCUSD, BCHUSD, ADAUSD, DOTUSD, SOLUSD\n"
                 "• ETFs: SPY, QQQ, GLD, XLF, IWM, EEM\n"
                 "• Stocks: AAPL, TSLA, AMZN, GOOGL, MSFT, META, NVDA, NFLX\n"
-                "• Synthetics: BOOM1000, BOOM300, BOOM500, BOOM600, BOOM900, CRASH1000, CRASH300, CRASH500, CRASH600, CRASH900, VOLATILITY100, VOLATILITY75, VOLATILITY50, VOLATILITY10, VOLATILITY25, VOLATILITY75S, VOLATILITY50S, VOLATILITY150S, VOLATILITY250S, JUMPS\n\n"
+                "• Synthetics: BOOM1000, BOOM300, BOOM500, BOOM600, BOOM900, CRASH1000, CRASH300, CRASH500, CRASH600, CRASH900, VOLATILITY100, VOLATILITY75, VOLATILITY50, VOLATILITY10, VOLATILITY25, VOLATILITY75S, VOLATILITY50S, VOLATILITY150S, VOLATILITY250S, JUMPS, JUMP100, JUMP10, JUMP75, JUMP25\n\n"
                 "Commands:\n"
                 "➤ Analysis: XAUUSD\n"
                 "➤ Price: PRICE BTCUSD\n"
