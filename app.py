@@ -190,7 +190,6 @@ async def async_get_deriv_data(symbol, interval='15min'):
             await websocket.send(json.dumps(request_payload))
             response = await websocket.recv()
             data = json.loads(response)
-            # Check for errors in the response
             if "error" in data:
                 logger.error(f"Deriv API error for {symbol}: {data.get('error', 'Unknown error')}")
                 return None
@@ -210,51 +209,20 @@ async def async_get_deriv_data(symbol, interval='15min'):
         logger.error(f"Error connecting to Deriv WebSocket for {symbol}: {str(e)}")
         return None
 
-def get_deriv_data(symbol, interval='15min'):
+async def async_analyze_price_action(symbol):
+    config = convert_symbol(symbol)
+    # Run the three data requests concurrently
+    tasks = [
+        async_get_deriv_data(config["symbol"], TIMEFRAMES['analysis']),
+        async_get_deriv_data(config["symbol"], TIMEFRAMES['sl']),
+        async_get_deriv_data(config["symbol"], TIMEFRAMES['entry'])
+    ]
     try:
-        config = convert_symbol(symbol)
-        # Use a 10-second timeout to avoid long waits that can block Flask workers.
-        return asyncio.run(asyncio.wait_for(async_get_deriv_data(config["symbol"], interval), timeout=10))
+        df_15m, df_5m, df_1m = await asyncio.gather(*tasks)
     except Exception as e:
-        logger.error(f"Data Error ({symbol}): {str(e)}")
+        logger.error(f"Error gathering data for {symbol}: {str(e)}")
         return None
 
-def convert_symbol(symbol):
-    symbol = symbol.upper()
-    if symbol.startswith("VOLATILITY"):
-        remainder = symbol[len("VOLATILITY"):]
-        if remainder.endswith("S"):
-            key = remainder[:-1]
-            code = SYMBOL_MAP["VOLATILITY"]["SHORT"].get(key)
-        else:
-            code = SYMBOL_MAP["VOLATILITY"]["STANDARD"].get(remainder)
-        if code:
-            return {"symbol": code, "category": "synthetic"}
-        else:
-            return {"symbol": symbol, "category": "synthetic"}
-    elif symbol.startswith("JUMP"):
-        remainder = symbol[len("JUMP"):]
-        code = SYMBOL_MAP["JUMP"].get(remainder)
-        if code:
-            return {"symbol": code, "category": "synthetic"}
-        else:
-            return {"symbol": symbol, "category": "synthetic"}
-    else:
-        return SYMBOL_MAP.get(symbol, {"symbol": symbol, "category": None})
-
-# ======== CORE TRADING FUNCTIONS ========
-def calculate_winrate(data):
-    if len(data) < 100:
-        return "N/A"
-    df_sorted = data.sort_index(ascending=True)
-    changes = df_sorted['close'].pct_change().dropna()
-    return f"{(len(changes[changes > 0]) / len(changes)) * 100:.1f}%"
-
-def analyze_price_action(symbol):
-    df_15m = get_deriv_data(symbol, TIMEFRAMES['analysis'])
-    df_5m = get_deriv_data(symbol, TIMEFRAMES['sl'])
-    df_1m = get_deriv_data(symbol, TIMEFRAMES['entry'])
-    
     if df_15m is None or len(df_15m) < 2:
         return None
     if df_5m is None or df_5m.empty:
@@ -284,15 +252,15 @@ def analyze_price_action(symbol):
     if not signal:
         return None
 
-    # Special handling for XAUUSD: update entry price from current minute data.
+    # Special handling for XAUUSD: update entry from current minute data.
     if symbol == "XAUUSD":
-        current_df = get_deriv_data(symbol, '1min')
-        if current_df is not None and not current_df.empty:
-            entry = current_df['close'].iloc[0]
+        df_curr = await async_get_deriv_data(config["symbol"], '1min')
+        if df_curr is not None and not df_curr.empty:
+            entry = df_curr['close'].iloc[0]
 
     stop_loss_distance = abs(signal[1] - signal[2])
     position_size = calculate_position_size(DEFAULT_ACCOUNT_BALANCE, RISK_PERCENTAGE, stop_loss_distance)
-    
+
     return {
         'symbol': symbol,
         'signal': signal[0],
@@ -303,6 +271,38 @@ def analyze_price_action(symbol):
         'tp2': signal[4],
         'position_size': position_size
     }
+
+def analyze_price_action(symbol):
+    # Synchronously run the asynchronous analysis so that results are available immediately.
+    try:
+        return asyncio.run(async_analyze_price_action(symbol))
+    except Exception as e:
+        logger.error(f"Analysis Error ({symbol}): {str(e)}")
+        return None
+
+# ======== SYMBOL CONVERSION ========
+def convert_symbol(symbol):
+    symbol = symbol.upper()
+    if symbol.startswith("VOLATILITY"):
+        remainder = symbol[len("VOLATILITY"):]
+        if remainder.endswith("S"):
+            key = remainder[:-1]
+            code = SYMBOL_MAP["VOLATILITY"]["SHORT"].get(key)
+        else:
+            code = SYMBOL_MAP["VOLATILITY"]["STANDARD"].get(remainder)
+        if code:
+            return {"symbol": code, "category": "synthetic"}
+        else:
+            return {"symbol": symbol, "category": "synthetic"}
+    elif symbol.startswith("JUMP"):
+        remainder = symbol[len("JUMP"):]
+        code = SYMBOL_MAP["JUMP"].get(remainder)
+        if code:
+            return {"symbol": code, "category": "synthetic"}
+        else:
+            return {"symbol": symbol, "category": "synthetic"}
+    else:
+        return SYMBOL_MAP.get(symbol, {"symbol": symbol, "category": None})
 
 # ======== FLASK ROUTES ========
 @app.route("/")
@@ -316,26 +316,28 @@ def webhook():
         response = MessagingResponse()
         user_number = request.form.get("From")
 
-        # Handle group number selection
+        # If user sends a digit, assume group analysis
         if incoming_msg.isdigit():
             group_number = int(incoming_msg)
             if 1 <= group_number <= len(CATEGORIES):
                 category_key, category_name = CATEGORIES[group_number-1]
                 symbols = get_symbols_by_category(category_key)
-                
                 if not symbols:
                     response.message(f"No symbols found in {category_name} group.")
                     return str(response)
+                
+                # Run analysis concurrently for all symbols in the group
+                async def group_analysis():
+                    tasks = [async_analyze_price_action(sym) for sym in symbols]
+                    return await asyncio.gather(*tasks)
+                analyses_list = asyncio.run(group_analysis())
 
                 analyses = []
-                for symbol in symbols:
-                    analysis = analyze_price_action(symbol)
+                for sym, analysis in zip(symbols, analyses_list):
                     if analysis:
-                        # Update entry price for XAUUSD
-                        if symbol == "XAUUSD":
-                            df_1m = get_deriv_data(symbol, TIMEFRAMES['entry'])
-                            if df_1m is not None and not df_1m.empty:
-                                analysis['entry'] = df_1m['close'].iloc[0]
+                        # Update XAUUSD entry from latest 1min data if applicable.
+                        if sym == "XAUUSD":
+                            analysis['entry'] = analysis['entry']
                         msg = (f"📊 {analysis['symbol']} Analysis\n"
                                f"Signal: {analysis['signal']}\n"
                                f"Winrate: {analysis['winrate']}\n"
@@ -345,15 +347,14 @@ def webhook():
                                f"TP2: {analysis['tp2']:.5f}")
                         analyses.append(msg)
                     else:
-                        analyses.append(f"No trading signal for {symbol}")
-
+                        analyses.append(f"No trading signal for {sym}")
                 response.message("\n\n".join(analyses))
                 return str(response)
             else:
                 response.message("❌ Invalid group number. Send 'HI' for options.")
                 return str(response)
 
-        # Handle individual symbol analysis
+        # Handle individual symbol analysis immediately
         elif incoming_msg in SYMBOL_MAP or incoming_msg.startswith(("VOLATILITY", "JUMP")):
             analysis = analyze_price_action(incoming_msg)
             if analysis:
@@ -382,10 +383,10 @@ def webhook():
             response.message(msg)
             return str(response)
 
-        # Handle price checks
+        # Handle price check commands
         elif incoming_msg.startswith("PRICE "):
             symbol = incoming_msg.split(" ")[1]
-            df = get_deriv_data(symbol, interval='1min')
+            df = asyncio.run(async_get_deriv_data(convert_symbol(symbol)["symbol"], interval='1min'))
             if df is not None and not df.empty:
                 price = df['close'].iloc[0]
                 response.message(f"Current {symbol}: {price:.5f}")
@@ -393,7 +394,7 @@ def webhook():
                 response.message("❌ Price unavailable")
             return str(response)
 
-        # Handle alerts
+        # Handle alerts activation
         elif incoming_msg.startswith("ALERT "):
             symbol = incoming_msg.split(" ")[1]
             if symbol in SYMBOL_MAP or symbol.startswith(("VOLATILITY", "JUMP")):
@@ -416,10 +417,9 @@ def webhook():
             greeting += "\nSend group number (e.g., 1) for analysis of all assets in that category."
             response.message(greeting)
             return str(response)
-
         else:
             response.message("❌ Invalid command. Send 'HI' for help")
-        return str(response)
+            return str(response)
     except Exception as e:
         logger.error(f"Error in webhook: {str(e)}")
         return "Error processing request", 500
