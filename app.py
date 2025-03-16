@@ -75,15 +75,15 @@ SYMBOL_MAP = {
     "ASX":    {"symbol": "AUS200", "category": "index"},         # Australia 200
     "CAC":    {"symbol": "FRA40", "category": "index"},          # France 40
 
-    # Cryptocurrencies (updated with R_ prefix)
-    "BTCUSD": {"symbol": "R_BTCUSD", "category": "crypto"},
-    "ETHUSD": {"symbol": "R_ETHUSD", "category": "crypto"},
-    "XRPUSD": {"symbol": "R_XRPUSD", "category": "crypto"},
-    "LTCUSD": {"symbol": "R_LTCUSD", "category": "crypto"},
-    "BCHUSD": {"symbol": "R_BCHUSD", "category": "crypto"},
-    "ADAUSD": {"symbol": "R_ADAUSD", "category": "crypto"},
-    "DOTUSD": {"symbol": "R_DOTUSD", "category": "crypto"},
-    "SOLUSD": {"symbol": "R_SOLUSD", "category": "crypto"},
+    # Cryptocurrencies (using your provided mapping)
+    "BTCUSD": {"symbol": "BTCUSD", "category": "crypto"},
+    "ETHUSD": {"symbol": "ETHUSD", "category": "crypto"},
+    "XRPUSD": {"symbol": "XRPUSD", "category": "crypto"},
+    "LTCUSD": {"symbol": "LTCUSD", "category": "crypto"},
+    "BCHUSD": {"symbol": "BCHUSD", "category": "crypto"},
+    "ADAUSD": {"symbol": "ADAUSD", "category": "crypto"},
+    "DOTUSD": {"symbol": "DOTUSD", "category": "crypto"},
+    "SOLUSD": {"symbol": "SOLUSD", "category": "crypto"},
 
     # ETFs
     "SPY": {"symbol": "ETF_SPY", "category": "etf"},
