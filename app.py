@@ -261,7 +261,7 @@ def analyze_price_action(symbol):
     if not signal:
         return None
 
-    # Calculate position size based on risk management
+    # Calculate position size based on risk management (kept internally, not sent to user)
     stop_loss_distance = abs(signal[1] - signal[2])
     position_size = calculate_position_size(DEFAULT_ACCOUNT_BALANCE, RISK_PERCENTAGE, stop_loss_distance)
 
@@ -323,7 +323,7 @@ def webhook():
 
         if incoming_msg in ["HI", "HELLO", "START"]:
             response.message(
-                "📈 ShadowFx Trading Bot 📈\n"
+                "📈 Space_Zero 2.0 Trading Bot 📈\n"
                 "Supported Instruments:\n"
                 "• Forex: EURUSD, GBPUSD, USDJPY, AUDUSD, USDCAD, USDCHF, NZDUSD, EURGBP, USDSEK, USDNOK, USDTRY, EURJPY, GBPJPY\n"
                 "• Commodities: XAUUSD, XAGUSD, XPTUSD, XPDUSD, CL1, NG1, CO1, HG1\n"
@@ -370,12 +370,10 @@ def webhook():
                 msg = (f"📊 {analysis['symbol']} Analysis\n"
                        f"Signal: {analysis['signal']}\n"
                        f"Winrate: {analysis['winrate']}\n"
-                       f"Strategy: {analysis['strategy']}\n"
                        f"Entry: {analysis['entry']:.5f}\n"
                        f"SL: {analysis['sl']:.5f}\n"
                        f"TP1: {analysis['tp1']:.5f}\n"
-                       f"TP2: {analysis['tp2']:.5f}\n"
-                       f"Position Size: {analysis['position_size']:.2f}")
+                       f"TP2: {analysis['tp2']:.5f}")
             else:
                 msg = f"No trading opportunity found for {symbol}"
 
