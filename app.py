@@ -112,14 +112,14 @@ SYMBOL_MAP = {
     "BOOM900":  {"symbol": "BOOM900",  "category": "synthetic"},
 
     "CRASH1000": {"symbol": "CRASH1000", "category": "synthetic"},
-    "CRASH300":  {"symbol": "CRASH300",  "category": "synthetic"},
-    "CRASH500":  {"symbol": "CRASH500",  "category": "synthetic"},
-    "CRASH600":  {"symbol": "CRASH600",  "category": "synthetic"},
-    "CRASH900":  {"symbol": "CRASH900",  "category": "synthetic"},
+    "CRASH300":  {"symbol": "CRASH300", "category": "synthetic"},
+    "CRASH500":  {"symbol": "CRASH500", "category": "synthetic"},
+    "CRASH600":  {"symbol": "CRASH600", "category": "synthetic"},
+    "CRASH900":  {"symbol": "CRASH900", "category": "synthetic"},
 
-    # Synthetics - Volatility (using actual codes, with VOL75 updated)
+    # Synthetics - Volatility (using actual codes)
     "VOLATILITY100":  {"symbol": "1HZ100V",  "category": "synthetic"},
-    "VOLATILITY75":   {"symbol": "VOL75",    "category": "synthetic"},  # updated mapping
+    "VOLATILITY75":   {"symbol": "1HZ75V",   "category": "synthetic"},  # updated mapping
     "VOLATILITY50":   {"symbol": "1HZ50V",   "category": "synthetic"},
     "VOLATILITY10":   {"symbol": "1HZ10V",   "category": "synthetic"},
     "VOLATILITY25":   {"symbol": "1HZ25V",   "category": "synthetic"},
@@ -128,7 +128,7 @@ SYMBOL_MAP = {
     "VOLATILITY150S": {"symbol": "1HZ150SV", "category": "synthetic"},
     "VOLATILITY250S": {"symbol": "1HZ250SV", "category": "synthetic"},
 
-    # Synthetics - Jumps (added new jump instruments)
+    # Synthetics - Jumps (new instruments added)
     "JUMPS": {"symbol": "JUMPS", "category": "synthetic"},
     "JUMP100": {"symbol": "JUMP100", "category": "synthetic"},
     "JUMP10": {"symbol": "JUMP10", "category": "synthetic"},
@@ -210,11 +210,13 @@ def get_active_symbols():
 def get_deriv_data(symbol, interval='15min'):
     try:
         config = convert_symbol(symbol)
-        active = get_active_symbols()
-        active_symbols = [item["symbol"] for item in active]
-        if config["symbol"] not in active_symbols:
-            logger.error(f"Symbol {config['symbol']} not active.")
-            return None
+        # For crypto and synthetic instruments, skip active-symbol check.
+        if config["category"] not in ["crypto", "synthetic"]:
+            active = get_active_symbols()
+            active_symbols = [item["symbol"] for item in active]
+            if config["symbol"] not in active_symbols:
+                logger.error(f"Symbol {config['symbol']} not active.")
+                return None
         return asyncio.run(async_get_deriv_data(config["symbol"], interval))
     except Exception as e:
         logger.error(f"Data Error ({symbol}): {str(e)}")
