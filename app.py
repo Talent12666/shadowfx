@@ -56,7 +56,9 @@ SYMBOL_MAP = {
     "GBPJPY": {"symbol": "frxGBPJPY", "category": "forex"},
 
     # Commodities
-    "XAUUSD": {"symbol": "XAUUSD", "category": "commodity"},  # Gold vs USD
+    # Previously we used WLDAUD for gold vs AUD;
+    # To get gold vs USD we now use "XAUUSD" and set its category to synthetic so the active symbol check is skipped.
+    "XAUUSD": {"symbol": "XAUUSD", "category": "synthetic"},
     "XAGUSD": {"symbol": "SILVER", "category": "commodity"},   # Silver
     "CL1":    {"symbol": "CL_BRENT", "category": "commodity"},  # Brent Crude Oil
     "NG1":    {"symbol": "NG_HEN", "category": "commodity"},    # Natural Gas
@@ -74,26 +76,16 @@ SYMBOL_MAP = {
     "ASX":    {"symbol": "AUS200", "category": "index"},         # Australia 200
     "CAC":    {"symbol": "FRA40", "category": "index"},          # France 40
 
-    # Cryptocurrencies – Try one of the following mappings:
-    # Option 1 (if your active symbols list returns crypto with an "R_" prefix):
-    "BTCUSD": {"symbol": "R_BTCUSD", "category": "crypto"},
-    "ETHUSD": {"symbol": "R_ETHUSD", "category": "crypto"},
-    "XRPUSD": {"symbol": "R_XRPUSD", "category": "crypto"},
-    "LTCUSD": {"symbol": "R_LTCUSD", "category": "crypto"},
-    "BCHUSD": {"symbol": "R_BCHUSD", "category": "crypto"},
-    "ADAUSD": {"symbol": "R_ADAUSD", "category": "crypto"},
-    "DOTUSD": {"symbol": "R_DOTUSD", "category": "crypto"},
-    "SOLUSD": {"symbol": "R_SOLUSD", "category": "crypto"},
-
-    # Option 2 (if your account returns crypto without a prefix):
-    # "BTCUSD": {"symbol": "BTCUSD", "category": "crypto"},
-    # "ETHUSD": {"symbol": "ETHUSD", "category": "crypto"},
-    # "XRPUSD": {"symbol": "XRPUSD", "category": "crypto"},
-    # "LTCUSD": {"symbol": "LTCUSD", "category": "crypto"},
-    # "BCHUSD": {"symbol": "BCHUSD", "category": "crypto"},
-    # "ADAUSD": {"symbol": "ADAUSD", "category": "crypto"},
-    # "DOTUSD": {"symbol": "DOTUSD", "category": "crypto"},
-    # "SOLUSD": {"symbol": "SOLUSD", "category": "crypto"},
+    # Cryptocurrencies
+    # Reverting to the mapping that previously worked: no prefix.
+    "BTCUSD": {"symbol": "BTCUSD", "category": "crypto"},
+    "ETHUSD": {"symbol": "ETHUSD", "category": "crypto"},
+    "XRPUSD": {"symbol": "XRPUSD", "category": "crypto"},
+    "LTCUSD": {"symbol": "LTCUSD", "category": "crypto"},
+    "BCHUSD": {"symbol": "BCHUSD", "category": "crypto"},
+    "ADAUSD": {"symbol": "ADAUSD", "category": "crypto"},
+    "DOTUSD": {"symbol": "DOTUSD", "category": "crypto"},
+    "SOLUSD": {"symbol": "SOLUSD", "category": "crypto"},
 
     # ETFs
     "SPY": {"symbol": "ETF_SPY", "category": "etf"},
@@ -133,7 +125,6 @@ SYMBOL_MAP = {
              "10": "1HZ10V",
              "25": "1HZ25V",
              "50": "1HZ50V",
-             # Swap the 75 key: Standard now maps to "1HZ75SV"
              "75": "1HZ75SV",
              "100": "1HZ100V",
              "150": "1HZ150V"
@@ -142,7 +133,6 @@ SYMBOL_MAP = {
              "10": "1HZ10SV",
              "25": "1HZ25SV",
              "50": "1HZ50SV",
-             # Swap the 75 key: Short-term now maps to "1HZ75V"
              "75": "1HZ75V",
              "150": "1HZ150SV",
              "250": "1HZ250SV"
@@ -232,7 +222,7 @@ def get_active_symbols():
 def get_deriv_data(symbol, interval='15min'):
     try:
         config = convert_symbol(symbol)
-        # For crypto and synthetic assets, skip active-symbol check.
+        # For crypto, synthetic and commodities (if mapped as synthetic), skip active-symbol check.
         if config["category"] not in ["crypto", "synthetic"]:
             active = get_active_symbols()
             active_symbols = [item["symbol"] for item in active]
