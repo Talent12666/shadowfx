@@ -31,7 +31,7 @@ trade_lock = Lock()
 scheduler = BackgroundScheduler()
 
 # ======== DERIV DATA CONFIGURATION ========
-DERIV_WS_URI = "wss://ws.derivws.com/websockets/v3?app_id=1089"  # Replace with your app_id if needed
+DERIV_WS_URI = "wss://ws.derivws.com/websockets/v3?app_id=69860"  # Replace with your app_id if needed
 
 GRANULARITY_MAP = {
     '15min': 900,
