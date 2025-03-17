@@ -35,7 +35,6 @@ DERIV_WS_URI = "wss://ws.derivws.com/websockets/v3?app_id=1089"  # Replace with 
 
 GRANULARITY_MAP = {
     '15min': 900,
-    '5min': 300,
     '1min': 60
 }
 
@@ -75,7 +74,8 @@ SYMBOL_MAP = {
     "ASX":    {"symbol": "AUS200", "category": "index"},         # Australia 200
     "CAC":    {"symbol": "FRA40", "category": "index"},          # France 40
 
-    # Cryptocurrencies (mapped according to Deriv)
+    # Cryptocurrencies – Try one of the following mappings:
+    # Option 1 (if your active symbols list returns crypto with an "R_" prefix):
     "BTCUSD": {"symbol": "R_BTCUSD", "category": "crypto"},
     "ETHUSD": {"symbol": "R_ETHUSD", "category": "crypto"},
     "XRPUSD": {"symbol": "R_XRPUSD", "category": "crypto"},
@@ -84,6 +84,16 @@ SYMBOL_MAP = {
     "ADAUSD": {"symbol": "R_ADAUSD", "category": "crypto"},
     "DOTUSD": {"symbol": "R_DOTUSD", "category": "crypto"},
     "SOLUSD": {"symbol": "R_SOLUSD", "category": "crypto"},
+
+    # Option 2 (if your account returns crypto without a prefix):
+    # "BTCUSD": {"symbol": "BTCUSD", "category": "crypto"},
+    # "ETHUSD": {"symbol": "ETHUSD", "category": "crypto"},
+    # "XRPUSD": {"symbol": "XRPUSD", "category": "crypto"},
+    # "LTCUSD": {"symbol": "LTCUSD", "category": "crypto"},
+    # "BCHUSD": {"symbol": "BCHUSD", "category": "crypto"},
+    # "ADAUSD": {"symbol": "ADAUSD", "category": "crypto"},
+    # "DOTUSD": {"symbol": "DOTUSD", "category": "crypto"},
+    # "SOLUSD": {"symbol": "SOLUSD", "category": "crypto"},
 
     # ETFs
     "SPY": {"symbol": "ETF_SPY", "category": "etf"},
@@ -151,7 +161,6 @@ SYMBOL_MAP = {
 
 TIMEFRAMES = {
     'analysis': '15min',
-    'sl': '5min',
     'entry': '1min'
 }
 
@@ -326,11 +335,8 @@ def calculate_winrate(data):
 
 def analyze_price_action(symbol):
     df_15m = get_deriv_data(symbol, TIMEFRAMES['analysis'])
-    df_5m = get_deriv_data(symbol, TIMEFRAMES['sl'])
     df_1m = get_deriv_data(symbol, TIMEFRAMES['entry'])
     if df_15m is None or len(df_15m) < 2:
-        return None
-    if df_5m is None or df_5m.empty:
         return None
     if df_1m is None or df_1m.empty:
         return None
